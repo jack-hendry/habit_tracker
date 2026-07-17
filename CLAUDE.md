@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project state
 
-This is a standalone Angular 17.3 application scaffolded via `ng new` (Angular CLI 17.3.11). It currently contains only the generated boilerplate (`AppComponent`, empty `routes`) — no habit-tracking features, services, or data models have been built yet. There is a single Angular project named `habit_tracker` in `angular.json`.
+This is a standalone Angular 21.2 application scaffolded via `ng new` (Angular CLI 21.2.19, TypeScript 5.9.3). It currently contains only the generated boilerplate (`AppComponent`, empty `routes`) — no habit-tracking features, services, or data models have been built yet. There is a single Angular project named `habit_tracker` in `angular.json`.
 
 ## Commands
 
@@ -25,6 +25,7 @@ This is a standalone Angular 17.3 application scaffolded via `ng new` (Angular C
 ## Architecture notes
 
 - Uses Angular's standalone component API (no `NgModule`s) — bootstrapped via `ApplicationConfig` in `src/app/app.config.ts` and `bootstrapApplication` in `src/main.ts`.
+- Zone change detection enabled via `provideZoneChangeDetection()` in the bootstrap config (Angular 21+ default).
 - Routing is configured through `provideRouter(routes)` in `app.config.ts`, with routes defined in `src/app/app.routes.ts` (currently empty).
 - Component styles use SCSS (`inlineStyleLanguage: scss`, default component schematic style is `scss`).
-- New components generated via `ng generate component <name>` will follow the standalone pattern by default (Angular 17 CLI default).
+- New components generated via `ng generate component <name>` will follow the standalone pattern by default (Angular 21 CLI default).
