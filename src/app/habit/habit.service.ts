@@ -1,5 +1,5 @@
 import { Injectable, signal } from '@angular/core';
-import { Habit, Schedule, isHabit, isSchedule } from './habit.model';
+import { Habit, Schedule, isHabit, isSchedule, DayStatus } from './habit.model';
 
 /**
  * Client-side habit store, persisted to localStorage (no backend, no accounts,
@@ -175,6 +175,150 @@ export class HabitService {
   private static nextIso(iso: string): string {
     const [y, m, d] = iso.split('-').map(Number);
     return HabitService.todayIso(new Date(y, m - 1, d + 1));
+  }
+
+  /**
+   * Status of a habit on a given day. One of: 'not-due' (not scheduled or
+   * before creation), 'done' (in completedDates), 'missed' (due, not done, past),
+   * 'pending' (due, not done, today), 'future' (after today). Order matters
+   * (CriticReview R1): future → done → not-due → pending → missed.
+   */
+  dayStatus(habit: Habit, iso: string, todayDate: Date = new Date()): DayStatus {
+    const todayIso = HabitService.todayIso(todayDate);
+
+    // 1. Future: iso > today
+    if (iso > todayIso) {
+      return 'future';
+    }
+
+    // 2. Done: iso in completedDates (including off-schedule completions)
+    if (habit.completedDates.includes(iso)) {
+      return 'done';
+    }
+
+    // 3. Not due: habit not due on this day (or before creation)
+    if (!this.isDueOn(habit, iso)) {
+      return 'not-due';
+    }
+
+    // 4. Pending: due today, not completed
+    if (iso === todayIso) {
+      return 'pending';
+    }
+
+    // 5. Missed: due, not done, past day
+    return 'missed';
+  }
+
+  /**
+   * Completion rate as a number 0..1 (component formats as %). Numerator = due
+   * days with status 'done'. Denominator = due days with status 'done' or
+   * 'missed' (excludes pending today and any future). Denominator 0 → return 1
+   * (nothing owed = perfect; CriticReview R3).
+   */
+  completionRate(habit: Habit, today: Date = new Date()): number {
+    const todayIso = HabitService.todayIso(today);
+    const createdIso = HabitService.createdIso(habit);
+
+    let completed = 0;
+    let countable = 0;
+
+    let cursor = createdIso;
+    while (cursor <= todayIso) {
+      if (this.isDueOn(habit, cursor)) {
+        const status = this.dayStatus(habit, cursor, today);
+        if (status === 'done') {
+          completed++;
+          countable++;
+        } else if (status === 'missed') {
+          countable++;
+        }
+        // 'pending' today is excluded; 'not-due' and 'future' never occur in this range
+      }
+      cursor = HabitService.nextIso(cursor);
+    }
+
+    // No due days yet → 100% (nothing owed)
+    if (countable === 0) {
+      return 1;
+    }
+
+    return completed / countable;
+  }
+
+  /**
+   * True iff there is ≥1 missed day in [createdIso .. yesterday]. A pending
+   * today does NOT make a habit lapsed (CriticReview R4). Short-circuits on the
+   * first missed day.
+   */
+  isLapsed(habit: Habit, today: Date = new Date()): boolean {
+    const todayIso = HabitService.todayIso(today);
+    const createdIso = HabitService.createdIso(habit);
+    const yesterdayIso = HabitService.prevIso(todayIso);
+
+    let cursor = createdIso;
+    while (cursor <= yesterdayIso) {
+      if (this.dayStatus(habit, cursor, today) === 'missed') {
+        return true;
+      }
+      cursor = HabitService.nextIso(cursor);
+    }
+
+    return false;
+  }
+
+  /**
+   * The max (most recent) completed date as `YYYY-MM-DD`, or null if never
+   * completed. Used for the dashboard's "last done N days ago" label.
+   */
+  lastDoneIso(habit: Habit): string | null {
+    if (habit.completedDates.length === 0) {
+      return null;
+    }
+    // Lexical max works for zero-padded YYYY-MM-DD strings
+    return habit.completedDates.reduce((max, date) => (date > max ? date : max));
+  }
+
+  /**
+   * Build a calendar month grid as an ordered array of cells (leading/trailing
+   * blanks to align weekday columns), each with iso and status. Month is 0-based
+   * (JS convention). Pure; year/month injectable for prev/next paging.
+   * Cells are { iso, status } for real days or { blank: true } for padding.
+   * Trailing blanks are optional (component pads in CSS grid).
+   */
+  monthGrid(
+    habit: Habit,
+    year: number,
+    month: number,
+    today: Date = new Date(),
+  ): Array<{ iso: string; status: DayStatus } | { blank: true }> {
+    const result: Array<{ iso: string; status: DayStatus } | { blank: true }> = [];
+
+    // Leading blanks: weekday index of the 1st (Sun=0)
+    const firstDayOfMonth = new Date(year, month, 1);
+    const leadingBlanks = firstDayOfMonth.getDay();
+    for (let i = 0; i < leadingBlanks; i++) {
+      result.push({ blank: true });
+    }
+
+    // Days of the month
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    for (let day = 1; day <= daysInMonth; day++) {
+      const iso = HabitService.todayIso(new Date(year, month, day));
+      const status = this.dayStatus(habit, iso, today);
+      result.push({ iso, status });
+    }
+
+    // Trailing blanks to complete the final week (optional, keeping total a multiple of 7)
+    const remainingCells = result.length % 7;
+    if (remainingCells !== 0) {
+      const trailingBlanks = 7 - remainingCells;
+      for (let i = 0; i < trailingBlanks; i++) {
+        result.push({ blank: true });
+      }
+    }
+
+    return result;
   }
 
   /** Persist all state. Guarded so a full/blocked quota never crashes. */

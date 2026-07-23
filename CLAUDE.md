@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Never commit anything (`git commit`, `git push`, etc.) without the user's explicit permission for that specific commit.
 - Read the relevant existing code before making changes — don't edit blind.
 - If an implementation attempt fails twice, stop and explain the problem instead of continuing to retry.
+- When executing steps from a `tasks.md` file, use the Haiku model (`--model haiku`) for faster, cost-efficient execution.
 
 ## Task sizing rule (SDD)
 

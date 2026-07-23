@@ -7,6 +7,13 @@ export type Schedule =
   | { type: 'weekdays'; days: number[] }; // JS getDay(): 0=Sun … 6=Sat
 
 /**
+ * Status of a habit on a given day. Phase 3 uses this for calendar/dashboard
+ * derivations. Order of checks (CriticReview R1): `future` → `done` → `not-due`
+ * → `pending` → `missed`.
+ */
+export type DayStatus = 'not-due' | 'done' | 'missed' | 'pending' | 'future';
+
+/**
  * A single tracked habit.
  *
  * `createdAt` is a UTC ISO timestamp (a moment in time). `completedDates` are

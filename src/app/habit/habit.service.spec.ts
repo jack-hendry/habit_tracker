@@ -273,3 +273,253 @@ describe('HabitService — scheduling + streaks', () => {
     });
   });
 });
+
+// Phase 3 — dashboard-calendar-stats. Dates from July 2026:
+// 13 Mon, 14 Tue, 15 Wed, 16 Thu, 17 Fri, 18 Sat, 19 Sun, 20 Mon.
+describe('HabitService — Phase 3 (dayStatus, completionRate, isLapsed, monthGrid)', () => {
+  const MWF = { type: 'weekdays' as const, days: [1, 3, 5] }; // Mon/Wed/Fri
+  const FRI_17 = new Date(2026, 6, 17); // "today" = Friday 2026-07-17
+
+  function makeHabit(overrides: Partial<Habit> = {}): Habit {
+    return {
+      id: 'h1',
+      name: 'Test',
+      createdAt: '2026-07-13T12:00:00Z',
+      completedDates: [],
+      schedule: { type: 'daily' },
+      ...overrides,
+    };
+  }
+
+  beforeEach(() => localStorage.clear());
+
+  describe('dayStatus', () => {
+    const service = new HabitService();
+
+    it('returns future for dates after today', () => {
+      const h = makeHabit();
+      expect(service.dayStatus(h, '2026-07-18', FRI_17)).toBe('future');
+      expect(service.dayStatus(h, '2026-08-01', FRI_17)).toBe('future');
+    });
+
+    it('returns future even if a future date is in completedDates (order check, R1)', () => {
+      const h = makeHabit({ completedDates: ['2026-07-18'] });
+      expect(service.dayStatus(h, '2026-07-18', FRI_17)).toBe('future');
+    });
+
+    it('returns done for any date in completedDates (including off-schedule)', () => {
+      const h = makeHabit({ completedDates: ['2026-07-14'] }); // Tue, not due
+      expect(service.dayStatus(h, '2026-07-14', FRI_17)).toBe('done');
+    });
+
+    it('returns not-due for unscheduled days', () => {
+      const h = makeHabit({ schedule: MWF });
+      expect(service.dayStatus(h, '2026-07-14', FRI_17)).toBe('not-due'); // Tue
+      expect(service.dayStatus(h, '2026-07-16', FRI_17)).toBe('not-due'); // Thu
+    });
+
+    it('returns not-due for dates before creation', () => {
+      const h = makeHabit({ createdAt: '2026-07-15T12:00:00Z' }); // Created Wed
+      expect(service.dayStatus(h, '2026-07-13', FRI_17)).toBe('not-due'); // Before creation
+    });
+
+    it('returns pending for today if due but not completed', () => {
+      const h = makeHabit();
+      expect(service.dayStatus(h, '2026-07-17', FRI_17)).toBe('pending');
+    });
+
+    it('returns missed for past due days that are not completed', () => {
+      const h = makeHabit();
+      expect(service.dayStatus(h, '2026-07-16', FRI_17)).toBe('missed');
+      expect(service.dayStatus(h, '2026-07-13', FRI_17)).toBe('missed');
+    });
+
+    it('respects weekdays schedule for status checks', () => {
+      const h = makeHabit({ schedule: MWF, completedDates: [] });
+      expect(service.dayStatus(h, '2026-07-13', FRI_17)).toBe('missed'); // Mon, past, not done
+      expect(service.dayStatus(h, '2026-07-14', FRI_17)).toBe('not-due'); // Tue, not due
+      expect(service.dayStatus(h, '2026-07-15', FRI_17)).toBe('missed'); // Wed, past, not done
+    });
+  });
+
+  describe('completionRate', () => {
+    const service = new HabitService();
+
+    it('returns 1 when all due days are completed', () => {
+      const h = makeHabit({ completedDates: ['2026-07-13', '2026-07-14', '2026-07-15', '2026-07-16', '2026-07-17'] });
+      expect(service.completionRate(h, FRI_17)).toBe(1);
+    });
+
+    it('returns 0.5 when half of due days are completed', () => {
+      // 5 due days (13-17): completed 13, 15 → 2/4 countable days (17 pending excluded) = 0.5
+      const h = makeHabit({ completedDates: ['2026-07-13', '2026-07-15'] });
+      expect(service.completionRate(h, FRI_17)).toBe(0.5);
+    });
+
+    it('excludes pending today from denominator (R2)', () => {
+      // 5 due days: completed 13,14,15,16, pending 17 → 4/4 = 1
+      const h = makeHabit({ completedDates: ['2026-07-13', '2026-07-14', '2026-07-15', '2026-07-16'] });
+      expect(service.completionRate(h, FRI_17)).toBe(1);
+    });
+
+    it('returns 1 when no due days yet (denominator 0, R3)', () => {
+      const h = makeHabit({ createdAt: '2026-07-19T12:00:00Z' }); // Created Sat, no due days by Fri
+      expect(service.completionRate(h, FRI_17)).toBe(1);
+    });
+
+    it('ignores off-schedule completions (not in denominator)', () => {
+      // Created 13 (Mon), due daily. Completed Tue 14 (off-schedule), then missed Wed-Fri.
+      const h = makeHabit({ completedDates: ['2026-07-14'] }); // Only off-schedule
+      // Due days: 13,14,15,16,17. Only 14 is completed but it doesn't count as due. Counts: 4 (13,15,16,17 missed/pending)
+      // Actually, 14 is due (daily) and done → 1/5 done = 0.2, wait. Let me re-think.
+      // Actually daily means every day is due, so 14 IS a due day and is done.
+      // 13 (missed), 14 (done), 15 (missed), 16 (missed), 17 (pending, excluded)
+      // Countable: 13,14,15,16 (pending today excluded) = 4; completed: 14 = 1
+      // Rate = 1/4 = 0.25
+      expect(service.completionRate(h, FRI_17)).toBeCloseTo(0.25, 2);
+    });
+
+    it('respects the createdIso floor (no phantom pre-history)', () => {
+      const h = makeHabit({ createdAt: '2026-07-15T12:00:00Z' }); // Created Wed
+      // Due days: 15, 16, 17; none completed
+      // Countable: 15,16 (17 pending excluded) = 2; completed: 0
+      // Rate = 0/2 = 0
+      expect(service.completionRate(h, FRI_17)).toBe(0);
+    });
+
+    it('works with weekdays schedules', () => {
+      const h = makeHabit({ schedule: MWF, completedDates: ['2026-07-13', '2026-07-15'] });
+      // Due days: 13 (Mon), 15 (Wed), 17 (Fri, pending, excluded)
+      // Countable: 13,15 = 2; completed: 2
+      // Rate = 2/2 = 1
+      expect(service.completionRate(h, FRI_17)).toBe(1);
+    });
+  });
+
+  describe('isLapsed', () => {
+    const service = new HabitService();
+
+    it('returns true if any past due day is missed', () => {
+      const h = makeHabit({ completedDates: [] }); // Nothing completed
+      expect(service.isLapsed(h, FRI_17)).toBe(true);
+    });
+
+    it('returns false if only today is pending (R4)', () => {
+      const h = makeHabit({
+        completedDates: ['2026-07-13', '2026-07-14', '2026-07-15', '2026-07-16'],
+      });
+      expect(service.isLapsed(h, FRI_17)).toBe(false);
+    });
+
+    it('returns false for a brand-new habit all caught up', () => {
+      const h = makeHabit({
+        createdAt: '2026-07-17T12:00:00Z',
+        completedDates: [],
+      });
+      expect(service.isLapsed(h, FRI_17)).toBe(false);
+    });
+
+    it('returns false when unscheduled gaps exist but no actual misses', () => {
+      const h = makeHabit({ schedule: MWF, completedDates: ['2026-07-13', '2026-07-15'] });
+      // Due: 13 (Mon), 15 (Wed), 17 (Fri, today pending)
+      // Checking [13..16]: 13 done, 14 not-due (skip), 15 done, 16 not-due (skip)
+      // No misses → lapsed = false
+      expect(service.isLapsed(h, FRI_17)).toBe(false);
+    });
+
+    it('does not count a pending today as a miss (walks only to yesterday)', () => {
+      const h = makeHabit({ completedDates: ['2026-07-13', '2026-07-14', '2026-07-15', '2026-07-16'] });
+      // Walk [13..16], all done → not lapsed
+      expect(service.isLapsed(h, FRI_17)).toBe(false);
+    });
+  });
+
+  describe('lastDoneIso', () => {
+    const service = new HabitService();
+
+    it('returns null if no completions', () => {
+      const h = makeHabit();
+      expect(service.lastDoneIso(h)).toBeNull();
+    });
+
+    it('returns the max date lexically', () => {
+      const h = makeHabit({ completedDates: ['2026-07-14', '2026-07-13', '2026-07-15'] });
+      expect(service.lastDoneIso(h)).toBe('2026-07-15');
+    });
+
+    it('includes off-schedule completions', () => {
+      const h = makeHabit({ schedule: MWF, completedDates: ['2026-07-14'] }); // Tue, off-schedule
+      expect(service.lastDoneIso(h)).toBe('2026-07-14');
+    });
+  });
+
+  describe('monthGrid', () => {
+    const service = new HabitService();
+
+    it('renders a month with correct leading blanks', () => {
+      // July 2026: 1st is a Wednesday (getDay() = 3)
+      const h = makeHabit();
+      const grid = service.monthGrid(h, 2026, 6, FRI_17); // month 6 = July
+      // Should have 3 blanks (Sun, Mon, Tue) then 1 (Wed)
+      expect(grid[0]).toEqual({ blank: true });
+      expect(grid[1]).toEqual({ blank: true });
+      expect(grid[2]).toEqual({ blank: true });
+      expect('iso' in grid[3] && grid[3].iso).toBe('2026-07-01');
+    });
+
+    it('renders all days of the month', () => {
+      const h = makeHabit();
+      const grid = service.monthGrid(h, 2026, 6, FRI_17);
+      // July has 31 days; 3 leading blanks + 31 days + trailing blanks to reach 42 (6*7)
+      // 34 + 8 = 42
+      const realCells = grid.filter((cell) => 'iso' in cell);
+      expect(realCells.length).toBe(31);
+    });
+
+    it('includes correct dayStatus for each day', () => {
+      const h = makeHabit({ completedDates: ['2026-07-17'] }); // Fri done
+      const grid = service.monthGrid(h, 2026, 6, FRI_17);
+      // Find the cell for 2026-07-17 (Friday, should be index 3+16 = 19)
+      const cell17 = grid.find((c) => 'iso' in c && c.iso === '2026-07-17');
+      expect(cell17).toEqual({ iso: '2026-07-17', status: 'done' });
+    });
+
+    it('renders leading blanks, real days, and trailing blanks for a complete week grid', () => {
+      const h = makeHabit();
+      const grid = service.monthGrid(h, 2026, 6, FRI_17);
+      // July 2026: starts Wed (3 blanks), 31 days = 34 total
+      // 34 % 7 = 6, so add 1 trailing blank to reach 35 (5 complete weeks)
+      expect(grid.length).toBe(35);
+      expect(grid.length % 7).toBe(0);
+    });
+
+    it('handles dates before habit creation (all not-due)', () => {
+      // June 2026 (month 5) is entirely before a July 10 creation
+      const h = makeHabit({ createdAt: '2026-07-10T12:00:00Z' });
+      const grid = service.monthGrid(h, 2026, 5, FRI_17); // June
+      const realCells = grid.filter((c) => 'iso' in c);
+      realCells.forEach((cell) => {
+        if ('status' in cell) {
+          expect(cell.status).toBe('not-due');
+        }
+      });
+    });
+
+    it('respects weekdays schedules', () => {
+      const h = makeHabit({ schedule: MWF }); // Mon, Wed, Fri
+      const grid = service.monthGrid(h, 2026, 6, FRI_17);
+      // 13 = Mon (due), 14 = Tue (not-due), 15 = Wed (due), etc.
+      const cell13 = grid.find((c) => 'iso' in c && c.iso === '2026-07-13');
+      const cell14 = grid.find((c) => 'iso' in c && c.iso === '2026-07-14');
+      expect('status' in cell13! && cell13!.status).toBe('missed'); // Mon, past, not done
+      expect('status' in cell14! && cell14!.status).toBe('not-due'); // Tue, not scheduled
+    });
+
+    it('renders future cells correctly', () => {
+      const h = makeHabit();
+      const grid = service.monthGrid(h, 2026, 6, FRI_17);
+      const cell18 = grid.find((c) => 'iso' in c && c.iso === '2026-07-18');
+      expect('status' in cell18! && cell18!.status).toBe('future');
+    });
+  });
+});
