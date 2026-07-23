@@ -8,6 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Read the relevant existing code before making changes — don't edit blind.
 - If an implementation attempt fails twice, stop and explain the problem instead of continuing to retry.
 - When executing steps from a `tasks.md` file, use the Haiku model (`--model haiku`) for faster, cost-efficient execution.
+- Before starting a `tasks.md` run, add a `## Executing: <spec-dir-name>` line to `STATE.md`, and remove it when the run finishes. The `enforce-haiku-tasks-pretooluse.sh` hook keys off that marker to block direct top-level edits during a run — without it the hook stays dormant, so unrelated Small tasks are never blocked.
 
 ## Task sizing rule (SDD)
 
@@ -36,8 +37,21 @@ This is a standalone Angular 21.2 application scaffolded via `ng new` (Angular C
 - `npm run watch` / `ng build --watch --configuration development` — incremental dev build.
 - `npm test` / `ng test` — run unit tests via Karma + Jasmine.
   - To run a single spec file, use Karma's `--include` or narrow via `fit`/`fdescribe` in the spec, since there is no built-in Angular CLI flag for a single-file run.
+- `npm run design:shot -- <name> [--width 1440] [--viewport-only]` — screenshot a route with Playwright and composite it beside its mockup. Requires the dev server to already be running.
 - There is no e2e test runner configured (`ng e2e` requires adding a package first).
 - There is no lint script configured in `package.json` / `angular.json`.
+
+## Design comparison
+
+Implementing a UI against a mockup uses Playwright, not the Chrome MCP tools (cheaper, local, deterministic).
+
+- Put mockups in `design/target/<name>.png`, named after the route (`dashboard`, `habits`, `calendar` — the map lives in `scripts/design-shot.mjs`).
+- `scripts/design-shot.mjs` screenshots the running app into `design/actual/`, then composites target and actual side by side into `design/compare/<name>.png`. Read only the composite — one image per round instead of two.
+- Always pass `--width` matching the mockup's pixel width. Mismatched viewports produce breakpoint differences that read as design bugs.
+- `design/actual/` and `design/compare/` are gitignored; `design/target/` is committed.
+- `/design-check <name>` runs the whole loop (server check → shoot → compare → fix → re-shoot).
+
+Only what a static screenshot shows gets checked — hover, focus, empty, and error states need their own mockups.
 
 ## Architecture notes
 
