@@ -61,5 +61,23 @@ All of the following, verified by hand at `localhost:4200` unless a test is name
 
 ## Retrospective (fill in before archiving)
 
-- Did Analyst.md catch anything not thought about up front?
-- Did anything in tasks.md turn out to be wrong during coding? What?
+**Did Analyst.md catch anything not thought about up front?**
+
+Yes — the Analyst's focus on **date handling and persistence**, enforced by
+the CriticReview, prevented two subtle production bugs:
+1. Using `toISOString()` for "today" would have silently swapped midnight-adjacent
+   completions to the wrong calendar day depending on timezone (R1).
+2. Unguarded `setItem` would have crashed the app in quota-exceeded scenarios
+   (R2).
+
+The "size up" decision to treat this as Medium with a focused critic pass was
+correct — these are high-leverage first-principles decisions that would have
+been expensive to fix later.
+
+**Did anything in tasks.md turn out to be wrong during coding? What?**
+
+No — the tasks were precise and the steps executed as written. The only
+minor adjustment: step 7's "add a Quick Tasks row" became "create STATE.md"
+because the file didn't exist yet. The spec deliberately left room for that
+(referencing `STATE.md` as a concept in CLAUDE.md, but not requiring it
+pre-exist).

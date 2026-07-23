@@ -1,0 +1,87 @@
+<div class="calendar-container">
+  <div class="calendar-header">
+    <h1>Calendar</h1>
+
+    @if (habits().length === 0) {
+      <div class="empty-state">
+        <p>Add a habit first.</p>
+      </div>
+    } @else {
+      <div class="habit-selector">
+        <label for="habit-select">Select habit:</label>
+        <select
+          id="habit-select"
+          [ngModel]="selectedHabit()?.id"
+          (ngModelChange)="onHabitChange($event)"
+          class="select"
+        >
+          @for (habit of habits(); track habit.id) {
+            <option [value]="habit.id">{{ iconGlyph(habit) }} {{ habit.name }}</option>
+          }
+        </select>
+      </div>
+
+      <!-- Phase 4a: habit colour/icon identify the selected habit here and in
+           the heading only. Day cells keep their status colouring untouched
+           (habit-metadata CriticReview R8). -->
+      @if (selectedHabit(); as habit) {
+        <div class="selected-habit">
+          <span class="habit-dot" [style.background-color]="colorHex(habit)"></span>
+          <span class="habit-icon" aria-hidden="true">{{ iconGlyph(habit) }}</span>
+          <span class="selected-habit-name">{{ habit.name }}</span>
+          @if (habit.category) {
+            <span class="category-chip">{{ habit.category }}</span>
+          }
+        </div>
+      }
+
+      <div class="month-nav">
+        <button (click)="prevMonth()" class="nav-button">← Prev</button>
+        <h2 class="month-label">{{ monthLabel() }}</h2>
+        <button (click)="nextMonth()" class="nav-button">Next →</button>
+      </div>
+
+      <div class="calendar-grid">
+        <!-- Weekday headers -->
+        <div class="weekday-headers">
+          @for (day of weekdayHeaders; track day) {
+            <div class="weekday-header">{{ day }}</div>
+          }
+        </div>
+
+        <!-- Calendar cells -->
+        @for (cell of monthGrid(); track $index) {
+          <div class="cell" [ngClass]="getCellClass(cell)">
+            @if (!('blank' in cell) && cell.iso) {
+              <span class="day-number">{{ cell.iso.split('-')[2] | slice: 0 : 2 }}</span>
+            }
+          </div>
+        }
+      </div>
+
+      <!-- Legend -->
+      <div class="legend">
+        <div class="legend-item">
+          <div class="legend-swatch status-done"></div>
+          <span>Done</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-swatch status-pending"></div>
+          <span>Pending</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-swatch status-missed"></div>
+          <span>Missed</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-swatch status-not-due"></div>
+          <span>Not scheduled</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-swatch status-future"></div>
+          <span>Future</span>
+        </div>
+      </div>
+    }
+  </div>
+</div>

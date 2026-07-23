@@ -1,0 +1,149 @@
+.dashboard-container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+
+  h1 {
+    margin: 0;
+    font-size: 2rem;
+  }
+
+  .overall-rate {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.5rem;
+
+    .rate-label {
+      font-size: 0.875rem;
+      color: #666;
+    }
+
+    .rate-value {
+      font-size: 1.75rem;
+      font-weight: bold;
+      color: #0066cc;
+    }
+  }
+}
+
+.section {
+  margin-bottom: 2rem;
+
+  h2 {
+    font-size: 1.25rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid #f0f0f0;
+  }
+
+  .no-items {
+    color: #999;
+    font-style: italic;
+    margin: 0;
+  }
+}
+
+.habit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.habit-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  background-color: #f9f9f9;
+  border-radius: 4px;
+  border-left: 4px solid #e0e0e0;
+
+  &.done {
+    background-color: #f0fdf4;
+    border-left-color: #22c55e;
+  }
+
+  &.lapsed {
+    background-color: #fef2f2;
+    border-left-color: #ef4444;
+  }
+
+  .habit-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    flex: 1;
+
+    input[type='checkbox'] {
+      width: 20px;
+      height: 20px;
+      cursor: pointer;
+    }
+
+    .habit-name {
+      font-weight: 500;
+    }
+  }
+
+  .habit-name {
+    flex: 1;
+  }
+
+  .last-done {
+    font-size: 0.875rem;
+    color: #666;
+  }
+
+  .completion-rate {
+    font-size: 0.875rem;
+    font-weight: bold;
+    color: #0066cc;
+    min-width: 40px;
+    text-align: right;
+  }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #999;
+
+  p {
+    margin: 0;
+    font-size: 1.125rem;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4a — habit colour/icon. `border-left` on `.habit-item` is already the
+// status channel here (.done green / .lapsed red), so the habit's own colour
+// gets a separate dot rather than overriding it (habit-metadata CriticReview
+// R8/R16): one visual channel, one meaning.
+// ---------------------------------------------------------------------------
+
+.habit-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.habit-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.habit-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
