@@ -216,3 +216,233 @@ h1 {
     background-color: #bd2130;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4a — metadata display, edit form, category filter.
+// Habit colour is a left accent only: it is decoration, never a status signal
+// (habit-metadata CriticReview R8/R10). Status stays on `.not-due-today`.
+// ---------------------------------------------------------------------------
+
+.habit-item {
+  border-left-width: 4px;
+  border-left-style: solid;
+
+  // While editing, the row becomes a full-width stacked form.
+  &:has(.edit-form) {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+.habit-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.habit-description {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #666;
+}
+
+.category-chip {
+  background-color: #eee;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  color: #444;
+  font-weight: 500;
+}
+
+.habit-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.edit-button {
+  padding: 0.5rem 1rem;
+  background-color: #fff;
+  color: #333;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+
+  &:hover {
+    background-color: #f0f0f0;
+  }
+}
+
+// --- Category filter -------------------------------------------------------
+
+.category-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.filter-label {
+  font-size: 0.875rem;
+  color: #666;
+}
+
+.filter-chip {
+  padding: 0.25rem 0.75rem;
+  background-color: #fff;
+  border: 1px solid #ccc;
+  border-radius: 999px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  font-family: inherit;
+  color: #444;
+
+  &:hover {
+    background-color: #f0f0f0;
+  }
+
+  &.active {
+    background-color: #0066cc;
+    border-color: #0066cc;
+    color: #fff;
+  }
+}
+
+// --- Inline edit form ------------------------------------------------------
+
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.edit-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.edit-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.notes-input {
+  resize: vertical;
+  font-family: inherit;
+}
+
+.swatch-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+
+  &.selected {
+    border-color: #222;
+    box-shadow: 0 0 0 2px #fff inset;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #0066cc;
+    outline-offset: 2px;
+  }
+}
+
+.icon-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.icon-option {
+  width: 32px;
+  height: 32px;
+  font-size: 1rem;
+  line-height: 1;
+  background-color: #fff;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0;
+
+  &:hover {
+    background-color: #f0f0f0;
+  }
+
+  &.selected {
+    border-color: #0066cc;
+    background-color: #e8f1f8;
+  }
+
+  &:focus-visible {
+    outline: 2px solid #0066cc;
+    outline-offset: 2px;
+  }
+}
+
+.schedule-warning {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  background-color: #fff8e1;
+  border: 1px solid #ffe082;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #7a5900;
+}
+
+.edit-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.save-button {
+  padding: 0.5rem 1.25rem;
+  background-color: #0066cc;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: inherit;
+
+  &:hover:not(:disabled) {
+    background-color: #0052a3;
+  }
+
+  &:disabled {
+    background-color: #b0c4d8;
+    cursor: not-allowed;
+  }
+}
+
+.cancel-button {
+  padding: 0.5rem 1.25rem;
+  background-color: #fff;
+  color: #333;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  font-family: inherit;
+
+  &:hover {
+    background-color: #f0f0f0;
+  }
+}

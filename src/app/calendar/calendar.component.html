@@ -16,10 +16,24 @@
           class="select"
         >
           @for (habit of habits(); track habit.id) {
-            <option [value]="habit.id">{{ habit.name }}</option>
+            <option [value]="habit.id">{{ iconGlyph(habit) }} {{ habit.name }}</option>
           }
         </select>
       </div>
+
+      <!-- Phase 4a: habit colour/icon identify the selected habit here and in
+           the heading only. Day cells keep their status colouring untouched
+           (habit-metadata CriticReview R8). -->
+      @if (selectedHabit(); as habit) {
+        <div class="selected-habit">
+          <span class="habit-dot" [style.background-color]="colorHex(habit)"></span>
+          <span class="habit-icon" aria-hidden="true">{{ iconGlyph(habit) }}</span>
+          <span class="selected-habit-name">{{ habit.name }}</span>
+          @if (habit.category) {
+            <span class="category-chip">{{ habit.category }}</span>
+          }
+        </div>
+      }
 
       <div class="month-nav">
         <button (click)="prevMonth()" class="nav-button">← Prev</button>

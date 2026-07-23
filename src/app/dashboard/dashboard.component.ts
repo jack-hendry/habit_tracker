@@ -1,7 +1,7 @@
 import { Component, inject, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HabitService } from '../habit/habit.service';
-import { Habit } from '../habit/habit.model';
+import { Habit, colorOf, iconOf } from '../habit/habit.model';
 
 @Component({
   selector: 'app-dashboard',
@@ -39,6 +39,19 @@ export class DashboardComponent {
     const total = habits.reduce((sum, h) => sum + this.habitService.completionRate(h, this.today), 0);
     return total / habits.length;
   });
+
+  /**
+   * Habit colour/icon (Phase 4a). Decoration only — the dashboard's own
+   * `.done`/`.lapsed` classes carry status, so the accent must not compete with
+   * them (habit-metadata CriticReview R8).
+   */
+  colorHex(habit: Habit): string {
+    return colorOf(habit.color).hex;
+  }
+
+  iconGlyph(habit: Habit): string {
+    return iconOf(habit.icon).glyph;
+  }
 
   getCompletionPercentage(habit: Habit): string {
     const rate = this.habitService.completionRate(habit, this.today);

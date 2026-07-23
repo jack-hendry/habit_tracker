@@ -1,5 +1,5 @@
 import { HabitService } from './habit.service';
-import { Habit } from './habit.model';
+import { Habit, HABIT_COLORS, HABIT_ICONS, colorOf, iconOf } from './habit.model';
 
 describe('HabitService', () => {
   beforeEach(() => {
@@ -521,5 +521,242 @@ describe('HabitService — Phase 3 (dayStatus, completionRate, isLapsed, monthGr
       const cell18 = grid.find((c) => 'iso' in c && c.iso === '2026-07-18');
       expect('status' in cell18! && cell18!.status).toBe('future');
     });
+  });
+});
+
+// Phase 4a — habit-metadata. Covers the new `update` mutation, the metadata
+// type-guards, and the palette resolvers. See specs/habit-metadata/.
+describe('HabitService — Phase 4a (metadata + update)', () => {
+  beforeEach(() => localStorage.clear());
+
+  function seed(): { service: HabitService; id: string } {
+    const service = new HabitService();
+    service.add('Read 20 min');
+    return { service, id: service.habits()[0].id };
+  }
+
+  describe('update — validation is atomic (CriticReview R2)', () => {
+    it('renames a habit and persists, leaving other fields untouched', () => {
+      const { service, id } = seed();
+      const before = service.habits()[0];
+
+      service.update(id, { name: 'Read 30 min' });
+
+      const after = service.habits()[0];
+      expect(after.name).toBe('Read 30 min');
+      expect(after.schedule).toEqual(before.schedule);
+      expect(new HabitService().habits()[0].name).toBe('Read 30 min');
+    });
+
+    it('trims the new name', () => {
+      const { service, id } = seed();
+      service.update(id, { name: '  Spaced  ' });
+      expect(service.habits()[0].name).toBe('Spaced');
+    });
+
+    it('is a no-op for an empty or whitespace-only name (AC 6)', () => {
+      const { service, id } = seed();
+      service.update(id, { name: '' });
+      service.update(id, { name: '   ' });
+      expect(service.habits()[0].name).toBe('Read 20 min');
+    });
+
+    it('is a no-op for a malformed schedule (AC 7)', () => {
+      const { service, id } = seed();
+      service.update(id, { schedule: { type: 'weekdays', days: [] } });
+      expect(service.habits()[0].schedule).toEqual({ type: 'daily' });
+    });
+
+    it('rejects the WHOLE patch when one key is invalid — a valid name in the same patch is not applied', () => {
+      const { service, id } = seed();
+
+      service.update(id, {
+        name: 'Should not be applied',
+        schedule: { type: 'weekdays', days: [] }, // corrupt
+      });
+
+      expect(service.habits()[0].name).toBe('Read 20 min');
+      expect(service.habits()[0].schedule).toEqual({ type: 'daily' });
+    });
+
+    it('is a no-op for an unknown id', () => {
+      const { service } = seed();
+      service.update('nope', { name: 'Ghost' });
+      expect(service.habits().length).toBe(1);
+      expect(service.habits()[0].name).toBe('Read 20 min');
+    });
+
+    it('never changes id, createdAt or completedDates (AC 9)', () => {
+      const { service, id } = seed();
+      service.toggleToday(id);
+      const before = service.habits()[0];
+
+      service.update(id, { name: 'Renamed', category: 'Health' });
+
+      const after = service.habits()[0];
+      expect(after.id).toBe(before.id);
+      expect(after.createdAt).toBe(before.createdAt);
+      expect(after.completedDates).toEqual(before.completedDates);
+    });
+
+    it('stores weekdays sorted ascending regardless of input order', () => {
+      const { service, id } = seed();
+      service.update(id, { schedule: { type: 'weekdays', days: [5, 1, 3] } });
+      expect(service.habits()[0].schedule).toEqual({ type: 'weekdays', days: [1, 3, 5] });
+    });
+  });
+
+  describe('update — metadata normalisation (CriticReview R3/R4)', () => {
+    it('sets and persists all five metadata fields (AC 4)', () => {
+      const { service, id } = seed();
+
+      service.update(id, {
+        description: 'Fiction before bed',
+        category: 'Learning',
+        color: 'sky',
+        icon: 'book',
+        notes: 'Currently on Dune',
+      });
+
+      const reloaded = new HabitService().habits()[0];
+      expect(reloaded.description).toBe('Fiction before bed');
+      expect(reloaded.category).toBe('Learning');
+      expect(reloaded.color).toBe('sky');
+      expect(reloaded.icon).toBe('book');
+      expect(reloaded.notes).toBe('Currently on Dune');
+    });
+
+    it('trims prose fields', () => {
+      const { service, id } = seed();
+      service.update(id, { category: '  Health  ', notes: '  hi  ' });
+      expect(service.habits()[0].category).toBe('Health');
+      expect(service.habits()[0].notes).toBe('hi');
+    });
+
+    it('clears a field set to an empty/whitespace string rather than storing "" (AC 5)', () => {
+      const { service, id } = seed();
+      service.update(id, { category: 'Health' });
+      expect(service.habits()[0].category).toBe('Health');
+
+      service.update(id, { category: '   ' });
+      expect(service.habits()[0].category).toBeUndefined();
+      // and it survives a round-trip as absent, not as ''
+      expect(new HabitService().habits()[0].category).toBeUndefined();
+    });
+
+    it('leaves a field alone when the patch omits it', () => {
+      const { service, id } = seed();
+      service.update(id, { category: 'Health', icon: 'run' });
+      service.update(id, { name: 'Renamed' });
+
+      expect(service.habits()[0].category).toBe('Health');
+      expect(service.habits()[0].icon).toBe('run');
+    });
+
+    it('clears colour/icon when set to an empty string', () => {
+      const { service, id } = seed();
+      service.update(id, { color: 'rose', icon: 'run' });
+      service.update(id, { color: '', icon: '' });
+      expect(service.habits()[0].color).toBeUndefined();
+      expect(service.habits()[0].icon).toBeUndefined();
+    });
+  });
+
+  describe('metadata persistence and corrupt-row handling (CriticReview R6/R7)', () => {
+    it('loads a pre-4a row with no metadata fields, unchanged (AC 12)', () => {
+      const legacy = {
+        id: 'legacy',
+        name: 'Old habit',
+        createdAt: '2026-07-13T12:00:00Z',
+        completedDates: ['2026-07-16'],
+        schedule: { type: 'daily' },
+      };
+      localStorage.setItem('habit_tracker.habits.v1', JSON.stringify([legacy]));
+
+      const service = new HabitService();
+      expect(service.habits().length).toBe(1);
+      expect(service.habits()[0].category).toBeUndefined();
+      expect(service.habits()[0].color).toBeUndefined();
+    });
+
+    it('accepts a row with all five metadata fields as strings', () => {
+      const rich = {
+        id: 'rich',
+        name: 'Rich habit',
+        createdAt: '2026-07-13T12:00:00Z',
+        completedDates: [],
+        schedule: { type: 'daily' },
+        description: 'd',
+        category: 'c',
+        color: 'sky',
+        icon: 'run',
+        notes: 'n',
+      };
+      localStorage.setItem('habit_tracker.habits.v1', JSON.stringify([rich]));
+      expect(new HabitService().habits().length).toBe(1);
+    });
+
+    it('drops a row whose metadata field is present but not a string', () => {
+      const bad = {
+        id: 'bad',
+        name: 'Corrupt',
+        createdAt: '2026-07-13T12:00:00Z',
+        completedDates: [],
+        schedule: { type: 'daily' },
+        category: 42,
+      };
+      localStorage.setItem('habit_tracker.habits.v1', JSON.stringify([bad]));
+      expect(new HabitService().habits().length).toBe(0);
+    });
+
+    it('keeps STORAGE_KEY at v1 — the v2 bump belongs to slice 4c', () => {
+      const { service } = seed();
+      expect(localStorage.getItem('habit_tracker.habits.v1')).toBeTruthy();
+      expect(localStorage.getItem('habit_tracker.habits.v2')).toBeNull();
+      expect(service.habits().length).toBe(1);
+    });
+  });
+
+  describe('schedule edits recalculate history live (AC 8, CriticReview R13)', () => {
+    it('changing the schedule changes past due-ness without touching completions', () => {
+      const service = new HabitService();
+      service.add('Gym', { type: 'daily' });
+      const id = service.habits()[0].id;
+
+      // The next Saturday strictly after the habit's creation date — `isDueOn`
+      // is false before creation, so a hardcoded past date would prove nothing.
+      const saturday = HabitService.todayIso(
+        (() => {
+          const d = new Date();
+          d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7));
+          return d;
+        })(),
+      );
+
+      // A daily habit is due on a Saturday; a Mon/Wed/Fri one is not.
+      expect(service.isDueOn(service.habits()[0], saturday)).toBeTrue();
+
+      service.update(id, { schedule: { type: 'weekdays', days: [1, 3, 5] } });
+
+      expect(service.isDueOn(service.habits()[0], saturday)).toBeFalse();
+      expect(service.habits()[0].completedDates).toEqual([]);
+    });
+  });
+});
+
+describe('palette resolvers (CriticReview R9)', () => {
+  it('colorOf falls back to the default for undefined and for an unknown id (AC 13)', () => {
+    expect(colorOf(undefined)).toBe(HABIT_COLORS[0]);
+    expect(colorOf('not-a-real-colour')).toBe(HABIT_COLORS[0]);
+  });
+
+  it('iconOf falls back to the default for undefined and for an unknown id (AC 13)', () => {
+    expect(iconOf(undefined)).toBe(HABIT_ICONS[0]);
+    expect(iconOf('not-a-real-icon')).toBe(HABIT_ICONS[0]);
+  });
+
+  it('resolves a real id to its own entry', () => {
+    expect(colorOf('sky').hex).toBe('#0ea5e9');
+    expect(iconOf('book').glyph).toBe('📖');
   });
 });

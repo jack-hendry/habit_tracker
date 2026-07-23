@@ -2,7 +2,7 @@ import { Component, inject, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HabitService } from '../habit/habit.service';
-import { Habit } from '../habit/habit.model';
+import { Habit, colorOf, iconOf } from '../habit/habit.model';
 
 @Component({
   selector: 'app-calendar',
@@ -50,6 +50,19 @@ export class CalendarComponent {
   });
 
   readonly weekdayHeaders = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  /**
+   * Habit colour/icon (Phase 4a) — used on the selector and heading only. The
+   * day cells encode `DayStatus` as colour, and tinting them by habit colour
+   * would put two meanings on one channel (habit-metadata CriticReview R8).
+   */
+  colorHex(habit: Habit): string {
+    return colorOf(habit.color).hex;
+  }
+
+  iconGlyph(habit: Habit): string {
+    return iconOf(habit.icon).glyph;
+  }
 
   onHabitChange(id: string): void {
     this.selectedId.set(id);

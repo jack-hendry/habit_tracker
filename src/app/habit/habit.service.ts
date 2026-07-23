@@ -1,5 +1,5 @@
 import { Injectable, signal } from '@angular/core';
-import { Habit, Schedule, isHabit, isSchedule, DayStatus } from './habit.model';
+import { Habit, HabitPatch, Schedule, isHabit, isSchedule, DayStatus } from './habit.model';
 
 /**
  * Client-side habit store, persisted to localStorage (no backend, no accounts,
@@ -68,6 +68,64 @@ export class HabitService {
       schedule,
     };
     this._habits.update((list) => [...list, habit]);
+    this.persist();
+  }
+
+  /**
+   * Edit a habit's name, schedule, or metadata (Phase 4a). The only mutation
+   * that is not add/remove/toggle.
+   *
+   * Validation is **atomic** (CriticReview R2): every key present in the patch is
+   * checked before anything is applied, so a patch with a good `name` and a
+   * malformed `schedule` changes nothing at all rather than half-applying a
+   * rename the user never asked for on its own.
+   *
+   * `HabitPatch` cannot express `id`/`createdAt`/`completedDates`, so metadata
+   * editing provably cannot rewrite identity or history (CriticReview R1).
+   *
+   * Note the asymmetry (CriticReview R4): `name` is *required-and-validated* —
+   * a blank one rejects the call — whereas the prose metadata fields are
+   * *trimmed-then-cleared*, with an empty result stored as `undefined` so that
+   * "cleared it" and "never had one" are the same state (CriticReview R3).
+   */
+  update(id: string, patch: HabitPatch): void {
+    const existing = this._habits().find((h) => h.id === id);
+    if (!existing) {
+      return;
+    }
+
+    // Validate everything first — no mutation, no persist, if anything fails.
+    if (patch.name !== undefined && !patch.name.trim()) {
+      return;
+    }
+    if (patch.schedule !== undefined && !isSchedule(patch.schedule)) {
+      return;
+    }
+
+    // Trimmed prose: empty result clears the field rather than storing ''.
+    const clean = (value: string | undefined, fallback: string | undefined) =>
+      value === undefined ? fallback : value.trim() || undefined;
+
+    const schedule = patch.schedule ?? existing.schedule;
+
+    const updated: Habit = {
+      ...existing,
+      name: patch.name !== undefined ? patch.name.trim() : existing.name,
+      // Sort weekdays ascending so display is stable regardless of click order
+      // (scheduling-streaks CriticReview R9).
+      schedule:
+        schedule.type === 'weekdays'
+          ? { type: 'weekdays', days: [...schedule.days].sort((a, b) => a - b) }
+          : schedule,
+      description: clean(patch.description, existing.description),
+      category: clean(patch.category, existing.category),
+      notes: clean(patch.notes, existing.notes),
+      // Palette ids, not prose — stored as given, empty string clears.
+      color: patch.color === undefined ? existing.color : patch.color || undefined,
+      icon: patch.icon === undefined ? existing.icon : patch.icon || undefined,
+    };
+
+    this._habits.update((list) => list.map((h) => (h.id === id ? updated : h)));
     this.persist();
   }
 

@@ -2,14 +2,15 @@
 
 ## Current work
 
-Phase 2 (Scheduling + streaks): ✓ **COMPLETE** — all 12 acceptance criteria verified (manual + 30 passing tests).
+Phase 4, slice 4a (Habit metadata): ✓ **COMPLETE** — all 14 acceptance criteria verified (manual + 81 passing tests). Remaining Phase 4 work: slice 4b (habit-lifecycle) and slice 4c (completion-types).
 
 ## Quick Tasks
 
 | Task | Status | Notes |
 |---|---|---|
 | habit-checklist (Phase 1) | ✓ Done | Model, service (with localStorage + signal + corruption recovery), component (add/check/delete), route, 13 passing tests, all 8 acceptance criteria verified |
-| scheduling-streaks (Phase 2) | ✓ Done | `Schedule` union (daily / weekdays); `isDueOn`, `currentStreak`, `longestStreak` streak logic; schedule picker UI; reactive streak display; migration for legacy rows; 30 passing tests (8 Phase 1 + 22 Phase 2); all 12 acceptance criteria verified |
+| scheduling-streaks (Phase 2) | ✓ Done | `Schedule` union (daily / weekdays); `isDueOn`, `currentStreak`, `longestStreak` streak logic; schedule picker UI; reactive streak display; migration for legacy rows; 60 passing tests total (including Phase 1 + 3); all 12 acceptance criteria verified |
+| habit-metadata (Phase 4a) | ✓ Done | Five optional metadata fields (description/category/color/icon/notes); `HabitPatch` type with id/createdAt/completedDates unrepresentable; `HabitService.update` with atomic validation; curated colour palette + icon set with safe `colorOf`/`iconOf` fallbacks; inline edit form with schedule-change warning; case-insensitive category filter; colour/icon on all three screens; 81 passing tests (60 prior + 21 new); all 14 acceptance criteria verified |
 
 ## Phases ahead
 
