@@ -8,7 +8,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Read the relevant existing code before making changes — don't edit blind.
 - If an implementation attempt fails twice, stop and explain the problem instead of continuing to retry.
 - When executing steps from a `tasks.md` file, use the Haiku model (`--model haiku`) for faster, cost-efficient execution.
-- Before starting a `tasks.md` run, add a `## Executing: <spec-dir-name>` line to `STATE.md`, and remove it when the run finishes. The `enforce-haiku-tasks-pretooluse.sh` hook keys off that marker to block direct top-level edits during a run — without it the hook stays dormant, so unrelated Small tasks are never blocked.
+- Project memory lives in `specs/STATE.md`: architectural decisions (`AD-NNN`), blockers (`B-NNN`), lessons (`L-NNN`), Quick Tasks, phase status. Append-only, never renumbered. Root `STATE.md` is only the run marker the hook greps for.
+- When a feature is finished, follow the archive ritual in `specs/STATE.md`: re-read the spec, add the `AD`/`L` entries it produced, move the folder to `specs/archive/YYYY-MM-DD-<name>/`, and put **both** changes in the same commit.
+- Before starting a `tasks.md` run, add a `## Executing: <spec-dir-name>` line to the root `STATE.md`, and remove it when the run finishes. The `enforce-haiku-tasks-pretooluse.sh` hook keys off that marker to block direct top-level edits during a run — without it the hook stays dormant, so unrelated Small tasks are never blocked.
 
 ## Task sizing rule (SDD)
 
@@ -16,7 +18,7 @@ Classify every task BEFORE starting. The size decides how much process it gets. 
 
 | Size | What it looks like | How to treat it |
 |---|---|---|
-| **Small** | 3 files or less, one sentence describes it | No spec. Fix it, verify it, add one row to Quick Tasks in `STATE.md` |
+| **Small** | 3 files or less, one sentence describes it | No spec. Fix it, verify it, add one row to Quick Tasks in `specs/STATE.md` |
 | **Medium** | Clear feature, less than 10 steps, no new pattern | `Analyst.md` + `tasks.md` + 1 harden round (`CriticReview.md`) |
 | **Large** | Touches more than one layer (e.g. API + DB + UI) | Full spec + 2 harden rounds + a review after coding |
 | **Complex** | Ambiguous, new domain, or a pattern the project never used | Same as Large, but the critic focuses on the ambiguous parts |
