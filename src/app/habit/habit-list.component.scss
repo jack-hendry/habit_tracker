@@ -113,6 +113,42 @@ h1 {
   font-style: italic;
 }
 
+// --- Archived toggle & controls bar ---
+
+.controls-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.archived-toggle {
+  margin-left: auto;
+}
+
+.toggle-button {
+  padding: 0.5rem 1rem;
+  background-color: #f0f0f0;
+  color: #333;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+
+  &:hover {
+    background-color: #e0e0e0;
+  }
+
+  &.active {
+    background-color: #0066cc;
+    border-color: #0066cc;
+    color: #fff;
+  }
+}
+
 .habit-list {
   display: flex;
   flex-direction: column;
@@ -136,6 +172,11 @@ h1 {
   &.not-due-today {
     opacity: 0.7;
   }
+
+  &.archived {
+    opacity: 0.6;
+    background-color: #f5f5f5;
+  }
 }
 
 .habit-main {
@@ -143,6 +184,17 @@ h1 {
   flex-direction: column;
   gap: 0.5rem;
   flex: 1;
+
+  &.archived-main {
+    gap: 0.25rem;
+  }
+}
+
+.habit-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
 }
 
 .habit-checkbox {
@@ -163,6 +215,28 @@ h1 {
   font-size: 1rem;
   color: #333;
   font-weight: 500;
+}
+
+.archived-name {
+  color: #999;
+}
+
+.paused-badge {
+  display: inline-block;
+  background-color: #fff8e1;
+  color: #7a5900;
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.paused-since {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #7a5900;
 }
 
 .habit-meta {
@@ -197,6 +271,88 @@ h1 {
   letter-spacing: 0.5px;
 }
 
+.completion-rate {
+  background-color: #e8f1f8;
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  color: #0066cc;
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.starts-label {
+  background-color: #e8f1f8;
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  color: #0066cc;
+  font-weight: 500;
+  font-size: 0.875rem;
+}
+
+.pause-button {
+  padding: 0.5rem 1rem;
+  background-color: #fff;
+  color: #333;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+
+  &:hover {
+    background-color: #f0f0f0;
+  }
+}
+
+.resume-button {
+  padding: 0.5rem 1rem;
+  background-color: #fff;
+  color: #333;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+
+  &:hover {
+    background-color: #f0f0f0;
+  }
+}
+
+.archive-button {
+  padding: 0.5rem 1rem;
+  background-color: #fff;
+  color: #333;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+
+  &:hover {
+    background-color: #f0f0f0;
+  }
+}
+
+.reactivate-button {
+  padding: 0.5rem 1rem;
+  background-color: #0066cc;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+
+  &:hover {
+    background-color: #0052a3;
+  }
+}
+
 .delete-button {
   padding: 0.5rem 1rem;
   background-color: #dc3545;
@@ -214,6 +370,36 @@ h1 {
 
   &:active {
     background-color: #bd2130;
+  }
+
+  &.confirming {
+    background-color: #bd2130;
+    animation: pulse 0.5s ease-in-out infinite;
+  }
+}
+
+.cancel-delete-button {
+  padding: 0.5rem 1rem;
+  background-color: #fff;
+  color: #333;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+
+  &:hover {
+    background-color: #f0f0f0;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
   }
 }
 
@@ -257,6 +443,8 @@ h1 {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .edit-button {
@@ -404,6 +592,26 @@ h1 {
   border-radius: 4px;
   font-size: 0.85rem;
   color: #7a5900;
+}
+
+.backdate-warning {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  background-color: #fff8e1;
+  border: 1px solid #ffe082;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #7a5900;
+}
+
+.future-warning {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  background-color: #e8f1f8;
+  border: 1px solid #bbd4e8;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #0066cc;
 }
 
 .edit-actions {

@@ -7,6 +7,20 @@ export type Schedule =
   | { type: 'weekdays'; days: number[] }; // JS getDay(): 0=Sun … 6=Sat
 
 /**
+ * A time period when a habit is paused. The interval is half-open: [from, to),
+ * so `to` is exclusive. This means "paused from Monday to Friday" is from Monday
+ * (inclusive) to Saturday (exclusive). When `to` is null, the pause is still open
+ * (ongoing). Using half-open intervals prevents off-by-one bugs: pause-then-resume
+ * on the same day yields `from === to` (an empty range affecting nothing), and
+ * setting `to = todayIso()` on resume reads naturally as "paused up to, not
+ * including, today — so today is live again" (habit-lifecycle CriticReview R2).
+ */
+export interface PausedRange {
+  from: string;      // YYYY-MM-DD, inclusive
+  to: string | null; // YYYY-MM-DD, EXCLUSIVE; null = still paused
+}
+
+/**
  * Status of a habit on a given day. Phase 3 uses this for calendar/dashboard
  * derivations. Order of checks (CriticReview R1): `future` → `done` → `not-due`
  * → `pending` → `missed`.
@@ -29,6 +43,12 @@ export type DayStatus = 'not-due' | 'done' | 'missed' | 'pending' | 'future';
  * raw hex or raw emoji, so the rendered values can be restyled without a data
  * migration. Resolve them through `colorOf` / `iconOf`, which fall back to the
  * default entry for an unknown id (CriticReview R9).
+ *
+ * Phase 4b lifecycle fields (`startDate`, `status`, `pausedRanges`) are all
+ * optional and migrate in place via backfill without a `STORAGE_KEY` bump. See
+ * habit-lifecycle CriticReview R7 (startDate replaces createdIso), R1 (status is
+ * not 'paused'; pause is derived from pausedRanges), and R2 (pausedRanges uses
+ * half-open intervals).
  */
 export interface Habit {
   id: string;
@@ -41,7 +61,17 @@ export interface Habit {
   color?: string;
   icon?: string;
   notes?: string;
+  startDate?: string;                 // YYYY-MM-DD local; backfilled on load
+  status?: 'active' | 'archived';     // absent → 'active'
+  pausedRanges?: PausedRange[];
 }
+
+/**
+ * ISO 8601 date pattern: YYYY-MM-DD with zero-padded month and day.
+ * Used by `isHabit` and `update()`'s `startDate` validation so they cannot
+ * disagree (habit-lifecycle CriticReview R4).
+ */
+export const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * The only fields `HabitService.update` may change. `id`, `createdAt` and
@@ -49,9 +79,13 @@ export interface Habit {
  * (habit-metadata CriticReview R1): editing metadata must never be able to
  * rewrite identity or history, and making that unrepresentable turns a silent
  * no-op into a compile error.
+ *
+ * Phase 4b adds `startDate` (a habit property that the edit form legitimately
+ * owns), but `status` and `pausedRanges` stay out entirely — they are history
+ * (like `completedDates`), not editable fields (habit-lifecycle CriticReview R3).
  */
 export type HabitPatch = Partial<
-  Pick<Habit, 'name' | 'schedule' | 'description' | 'category' | 'color' | 'icon' | 'notes'>
+  Pick<Habit, 'name' | 'schedule' | 'description' | 'category' | 'color' | 'icon' | 'notes' | 'startDate'>
 >;
 
 /** A curated colour from the fixed palette. `hex` is presentation; `id` is stored. */
@@ -139,6 +173,21 @@ export function isSchedule(value: unknown): value is Schedule {
 }
 
 /**
+ * Validate a `PausedRange`. Must have `from` matching `ISO_DATE` and `to` being
+ * either null or matching `ISO_DATE`. See `PausedRange` for the half-open
+ * interval convention.
+ */
+function isPausedRange(value: unknown): value is PausedRange {
+  if (value === null || typeof value !== 'object') {
+    return false;
+  }
+  const r = value as Record<string, unknown>;
+  const fromOk = typeof r['from'] === 'string' && ISO_DATE.test(r['from']);
+  const toOk = r['to'] === null || (typeof r['to'] === 'string' && ISO_DATE.test(r['to']));
+  return fromOk && toOk;
+}
+
+/**
  * Runtime type guard used for corrupt-data recovery: a single malformed row is
  * dropped while valid habits survive.
  *
@@ -150,6 +199,11 @@ export function isSchedule(value: unknown): value is Schedule {
  * R7): absent is fine, present-but-not-a-string is corrupt. "Optional" must not
  * become "unchecked" — an unknown *string* `color` id is not corrupt (it falls
  * back at render time), but `color: 42` is.
+ *
+ * Phase 4b adds structural validation for `startDate` (must match `ISO_DATE` if
+ * present), `status` (must be exactly 'active' or 'archived', not any string),
+ * and `pausedRanges` (must be an array of valid `PausedRange` objects).
+ * Present-but-malformed → row dropped as corrupt (habit-lifecycle CriticReview R4).
  */
 export function isHabit(value: unknown): value is Habit {
   if (value === null || typeof value !== 'object') {
@@ -159,6 +213,12 @@ export function isHabit(value: unknown): value is Habit {
   const scheduleOk = h['schedule'] === undefined || isSchedule(h['schedule']);
   const optionalStringOk = (key: string) => h[key] === undefined || typeof h[key] === 'string';
   const metadataOk = ['description', 'category', 'color', 'icon', 'notes'].every(optionalStringOk);
+
+  // Phase 4b: lifecycle field validation
+  const startDateOk = h['startDate'] === undefined || (typeof h['startDate'] === 'string' && ISO_DATE.test(h['startDate']));
+  const statusOk = h['status'] === undefined || h['status'] === 'active' || h['status'] === 'archived';
+  const pausedRangesOk = h['pausedRanges'] === undefined || (Array.isArray(h['pausedRanges']) && h['pausedRanges'].every(isPausedRange));
+
   return (
     metadataOk &&
     typeof h['id'] === 'string' &&
@@ -166,6 +226,9 @@ export function isHabit(value: unknown): value is Habit {
     typeof h['createdAt'] === 'string' &&
     Array.isArray(h['completedDates']) &&
     h['completedDates'].every((d) => typeof d === 'string') &&
-    scheduleOk
+    scheduleOk &&
+    startDateOk &&
+    statusOk &&
+    pausedRangesOk
   );
 }

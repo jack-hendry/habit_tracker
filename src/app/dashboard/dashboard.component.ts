@@ -12,14 +12,15 @@ import { Habit, colorOf, iconOf } from '../habit/habit.model';
 })
 export class DashboardComponent {
   private readonly habitService = inject(HabitService);
-  readonly habits = this.habitService.habits;
+  readonly habits = this.habitService.activeHabits;
 
   private readonly today = new Date();
   private readonly todayIso = HabitService.todayIso(this.today);
 
   readonly todoToday = computed(() => {
     return this.habits().filter(
-      (h) => this.habitService.dayStatus(h, this.todayIso, this.today) === 'pending'
+      (h) => !this.habitService.isPaused(h, this.today) &&
+             this.habitService.dayStatus(h, this.todayIso, this.today) === 'pending'
     );
   });
 
@@ -28,7 +29,10 @@ export class DashboardComponent {
   });
 
   readonly lapsed = computed(() => {
-    return this.habits().filter((h) => this.habitService.isLapsed(h, this.today));
+    return this.habits().filter(
+      (h) => !this.habitService.isPaused(h, this.today) &&
+             this.habitService.isLapsed(h, this.today)
+    );
   });
 
   readonly overallCompletionRate = computed(() => {

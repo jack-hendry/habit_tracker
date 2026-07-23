@@ -760,3 +760,359 @@ describe('palette resolvers (CriticReview R9)', () => {
     expect(iconOf('book').glyph).toBe('📖');
   });
 });
+
+// Phase 4b — habit-lifecycle. Covers startDate, status, pausedRanges, pause/resume,
+// archive/reactivate, and activeHabits. See specs/habit-lifecycle/.
+describe('HabitService — Phase 4b (habit-lifecycle — startDate, status, pausedRanges)', () => {
+  beforeEach(() => localStorage.clear());
+
+  describe('isHabit validates new Phase 4b fields structurally (AC 13, CriticReview R4)', () => {
+    it('accepts a pre-4b row with none of the three new fields (legacy row, AC 2/15)', () => {
+      const legacy = {
+        id: 'legacy',
+        name: 'Old habit',
+        createdAt: '2026-07-13T12:00:00Z',
+        completedDates: [],
+        schedule: { type: 'daily' },
+      };
+      localStorage.setItem('habit_tracker.habits.v1', JSON.stringify([legacy]));
+      expect(new HabitService().habits().length).toBe(1);
+    });
+
+    it('drops a row with status: "paused" (pause is derived, R1)', () => {
+      const bad = {
+        id: 'bad',
+        name: 'Bad',
+        createdAt: '2026-07-13T12:00:00Z',
+        completedDates: [],
+        schedule: { type: 'daily' },
+        status: 'paused',
+      };
+      localStorage.setItem('habit_tracker.habits.v1', JSON.stringify([bad]));
+      expect(new HabitService().habits().length).toBe(0);
+    });
+
+    it('drops a row with non-zero-padded startDate like "2026-7-1"', () => {
+      const bad = {
+        id: 'bad',
+        name: 'Bad',
+        createdAt: '2026-07-13T12:00:00Z',
+        completedDates: [],
+        schedule: { type: 'daily' },
+        startDate: '2026-7-1',
+      };
+      localStorage.setItem('habit_tracker.habits.v1', JSON.stringify([bad]));
+      expect(new HabitService().habits().length).toBe(0);
+    });
+
+    it('drops a row with malformed pausedRanges (from is not a date)', () => {
+      const bad = {
+        id: 'bad',
+        name: 'Bad',
+        createdAt: '2026-07-13T12:00:00Z',
+        completedDates: [],
+        schedule: { type: 'daily' },
+        pausedRanges: [{ from: 'x', to: null }],
+      };
+      localStorage.setItem('habit_tracker.habits.v1', JSON.stringify([bad]));
+      expect(new HabitService().habits().length).toBe(0);
+    });
+
+    it('accepts a row with valid pausedRanges', () => {
+      const good = {
+        id: 'good',
+        name: 'Good',
+        createdAt: '2026-07-13T12:00:00Z',
+        completedDates: [],
+        schedule: { type: 'daily' },
+        pausedRanges: [{ from: '2026-07-01', to: null }],
+      };
+      localStorage.setItem('habit_tracker.habits.v1', JSON.stringify([good]));
+      expect(new HabitService().habits().length).toBe(1);
+    });
+  });
+
+  describe('startDate backfill and number preservation (AC 2, R7)', () => {
+    it('loads a legacy pre-4b habit with startDate backfilled from createdAt', () => {
+      // Regression test (AC 2): seed localStorage with a pre-4b payload (no new
+      // fields), reload it, and verify startDate is backfilled to the local date
+      // of createdAt.
+      const legacy = {
+        id: 'h1',
+        name: 'Daily Read',
+        createdAt: '2026-07-13T12:00:00Z', // UTC noon = local morning July 13
+        completedDates: ['2026-07-16', '2026-07-17'],
+        schedule: { type: 'daily' },
+      };
+      localStorage.setItem('habit_tracker.habits.v1', JSON.stringify([legacy]));
+
+      const service = new HabitService();
+      const habit = service.habits()[0];
+      // Backfilled startDate should be the local date of createdAt
+      expect(habit.startDate).toBe('2026-07-13');
+    });
+
+    it('AC 2 regression: currentStreak/longestStreak/completionRate/isLapsed unchanged', () => {
+      // A real habit with a daily schedule, some history, and no new fields.
+      // After loading and backfilling, all four derivations must match their
+      // pre-4b values exactly.
+      const legacy = {
+        id: 'h1',
+        name: 'Daily Read',
+        createdAt: '2026-07-13T12:00:00Z', // Monday July 13
+        completedDates: ['2026-07-15', '2026-07-16', '2026-07-17'],
+        schedule: { type: 'daily' },
+      };
+      localStorage.setItem('habit_tracker.habits.v1', JSON.stringify([legacy]));
+
+      const FRI_17 = new Date(2026, 6, 17); // Friday 2026-07-17
+      const service = new HabitService();
+      const habit = service.habits()[0];
+
+      // These exact values must match the numbers before startDate backfill.
+      // Completed Wed 15, Thu 16, Fri 17 today → current streak 3
+      expect(service.currentStreak(habit, FRI_17)).toBe(3);
+      // Best run is the same 3
+      expect(service.longestStreak(habit, FRI_17)).toBe(3);
+      // Only Wed-Fri done; Mon-Tue missed (past and not done) → 3/5 countable
+      expect(service.completionRate(habit, FRI_17)).toBeCloseTo(0.6, 5);
+      // Has missed days (Mon, Tue), so lapsed
+      expect(service.isLapsed(habit, FRI_17)).toBe(true);
+    });
+
+    it('a future startDate makes isDueOn false today (AC 3)', () => {
+      const service = new HabitService();
+      service.add('Future Habit');
+      const habit = service.habits()[0];
+
+      // Manually set startDate to tomorrow
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowIso = HabitService.todayIso(tomorrow);
+      service.update(habit.id, { startDate: tomorrowIso });
+
+      const today = HabitService.todayIso();
+      expect(service.isDueOn(service.habits()[0], today)).toBe(false);
+    });
+
+    it('a future startDate gives streak 0 (AC 3)', () => {
+      const service = new HabitService();
+      service.add('Future Habit');
+      const id = service.habits()[0].id;
+
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowIso = HabitService.todayIso(tomorrow);
+      service.update(id, { startDate: tomorrowIso });
+
+      expect(service.currentStreak(service.habits()[0])).toBe(0);
+    });
+
+    it('a future startDate gives isLapsed false (AC 3)', () => {
+      const service = new HabitService();
+      service.add('Future Habit');
+      const id = service.habits()[0].id;
+
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowIso = HabitService.todayIso(tomorrow);
+      service.update(id, { startDate: tomorrowIso });
+
+      expect(service.isLapsed(service.habits()[0])).toBe(false);
+    });
+  });
+
+  describe('pause and resume', () => {
+    const FRI_17 = new Date(2026, 6, 17); // Friday July 17
+
+    it('pause appends an open range with today as from date', () => {
+      const h = {
+        id: 'h1',
+        name: 'Test',
+        createdAt: '2026-07-13T12:00:00Z',
+        completedDates: [],
+        schedule: { type: 'daily' as const },
+        startDate: '2026-07-13',
+      };
+      localStorage.setItem('habit_tracker.habits.v1', JSON.stringify([h]));
+
+      const svc = new HabitService();
+      svc.pause(svc.habits()[0].id);
+
+      const habit = svc.habits()[0];
+      expect(habit.pausedRanges).toBeDefined();
+      expect(habit.pausedRanges!.length).toBeGreaterThan(0);
+      expect(habit.pausedRanges![habit.pausedRanges!.length - 1].to).toBeNull(); // Open
+      expect(svc.isPaused(habit)).toBe(true);
+    });
+
+    it('pause, resume, then days inside the closed range stay not-due (AC 6, R6)', () => {
+      const h = {
+        id: 'h1',
+        name: 'Test',
+        createdAt: '2026-07-13T12:00:00Z',
+        completedDates: ['2026-07-13'], // Completed before the pause
+        schedule: { type: 'daily' as const },
+        startDate: '2026-07-13',
+        pausedRanges: [{ from: '2026-07-14', to: '2026-07-17' }], // [14, 17) = Tue-Thu
+      };
+      localStorage.setItem('habit_tracker.habits.v1', JSON.stringify([h]));
+
+      const SAT_18 = new Date(2026, 6, 18); // Check on the day after
+      const svc = new HabitService();
+      const reloaded = svc.habits()[0];
+      // Days 14, 15, 16 are inside [14, 17), so not-due (not missed)
+      expect(svc.dayStatus(reloaded, '2026-07-14', SAT_18)).toBe('not-due');
+      expect(svc.dayStatus(reloaded, '2026-07-15', SAT_18)).toBe('not-due');
+      expect(svc.dayStatus(reloaded, '2026-07-16', SAT_18)).toBe('not-due');
+      // Day 17 (Fri) is after the pause (17 is not < 17), so it's due. Fri is past, not done → missed
+      expect(svc.dayStatus(reloaded, '2026-07-17', SAT_18)).toBe('missed');
+      // The pause prevented days 14-16 from counting as missed; day 17 is missed
+      expect(svc.isLapsed(reloaded, SAT_18)).toBe(true);
+    });
+
+    it('a streak spanning a pause is unbroken (AC 7)', () => {
+      // Create a habit with completions before and after a pause.
+      const h = {
+        id: 'h1',
+        name: 'Daily',
+        createdAt: '2026-07-13T12:00:00Z', // Mon
+        completedDates: [
+          '2026-07-13', // Mon (before pause)
+          '2026-07-14', // Tue (before pause)
+          // Paused Wed-Fri 16 (closed on Fri with to=17)
+          '2026-07-17', // Fri (after pause)
+          '2026-07-18', // Sat (after pause)
+        ],
+        schedule: { type: 'daily' as const },
+        startDate: '2026-07-13',
+        pausedRanges: [{ from: '2026-07-15', to: '2026-07-17' }], // [15, 17)
+      };
+      localStorage.setItem('habit_tracker.habits.v1', JSON.stringify([h]));
+
+      const service = new HabitService();
+      const habit = service.habits()[0];
+      const SAT_18 = new Date(2026, 6, 18);
+
+      // currentStreak on Sat 18: walk backward from 18. 18 done → 17 done →
+      // 16,15 not-due (paused) → skip → 14 done → 13 done → 12 < startDate.
+      // Count: 18, 17, 14, 13 = 4 consecutive due+done days.
+      expect(service.currentStreak(habit, SAT_18)).toBe(4);
+    });
+
+    it('double-pause and stray-resume are no-ops (AC 8)', () => {
+      const service = new HabitService();
+      service.add('Test');
+      const id = service.habits()[0].id;
+
+      // First pause
+      service.pause(id);
+      let ranges = service.habits()[0].pausedRanges ?? [];
+      const firstLen = ranges.length;
+      expect(ranges[ranges.length - 1].to).toBeNull(); // Open
+
+      // Second pause (should be no-op)
+      service.pause(id);
+      ranges = service.habits()[0].pausedRanges ?? [];
+      expect(ranges.length).toBe(firstLen); // No new range added
+
+      // At most one open range, and it's the last
+      const openCount = ranges.filter((r) => r.to === null).length;
+      expect(openCount).toBeLessThanOrEqual(1);
+      if (openCount === 1) {
+        expect(ranges[ranges.length - 1].to).toBeNull();
+      }
+    });
+
+    it('after archive, at most one range is open and it is the last one (AC 8, R5)', () => {
+      const service = new HabitService();
+      service.add('Test');
+      const id = service.habits()[0].id;
+
+      // Pause, then archive
+      service.pause(id);
+      service.archive(id);
+
+      const ranges = service.habits()[0].pausedRanges ?? [];
+      const openRanges = ranges.filter((r) => r.to === null);
+      expect(openRanges.length).toBeLessThanOrEqual(1);
+      if (openRanges.length === 1) {
+        const lastRange = ranges[ranges.length - 1];
+        expect(lastRange.to).toBeNull();
+      }
+    });
+
+    it('archive hides from activeHabits but habits() includes it, completedDates unchanged (AC 9, AC 12)', () => {
+      const service = new HabitService();
+      service.add('Test');
+      const id = service.habits()[0].id;
+      service.toggleToday(id);
+
+      const before = service.habits()[0].completedDates.length;
+
+      service.archive(id);
+
+      expect(service.activeHabits().find((h) => h.id === id)).toBeUndefined();
+      expect(service.habits().find((h) => h.id === id)).toBeDefined();
+      expect(service.habits()[0].completedDates.length).toBe(before);
+    });
+
+    it('archive then reactivate retains completedDates and restores to activeHabits (AC 10)', () => {
+      const service = new HabitService();
+      service.add('Test');
+      const id = service.habits()[0].id;
+
+      // Complete it a few times
+      service.toggleToday(id);
+
+      const completedBefore = service.habits()[0].completedDates.slice();
+
+      // Advance clock and archive
+      const archiveDate = new Date();
+      archiveDate.setMonth(archiveDate.getMonth() + 2); // 2 months later
+
+      service.archive(id);
+      service.reactivate(id);
+
+      expect(service.activeHabits().find((h) => h.id === id)).toBeDefined();
+      expect(service.habits()[0].completedDates).toEqual(completedBefore);
+    });
+
+    it('update with valid name but invalid startDate changes nothing (R3)', () => {
+      const service = new HabitService();
+      service.add('Old Name');
+      const id = service.habits()[0].id;
+
+      service.update(id, { name: 'New Name', startDate: 'garbage' });
+
+      expect(service.habits()[0].name).toBe('Old Name');
+      expect(service.habits()[0].startDate).not.toBe('garbage');
+    });
+  });
+
+  describe('activeHabits computed signal', () => {
+    it('excludes archived habits', () => {
+      const service = new HabitService();
+      service.add('Active');
+      service.add('ToArchive');
+
+      const id = service.habits()[1].id;
+      service.archive(id);
+
+      expect(service.activeHabits().length).toBe(1);
+      expect(service.habits().length).toBe(2);
+      expect(service.activeHabits()[0].name).toBe('Active');
+    });
+
+    it('includes paused habits (they are not archived)', () => {
+      const service = new HabitService();
+      service.add('Paused');
+      const id = service.habits()[0].id;
+
+      service.pause(id);
+
+      expect(service.activeHabits().length).toBe(1);
+      expect(service.activeHabits()[0].id).toBe(id);
+    });
+  });
+});

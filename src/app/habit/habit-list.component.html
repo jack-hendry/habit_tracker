@@ -54,37 +54,54 @@
     <button (click)="add()" class="add-button">Add</button>
   </div>
 
-  <!-- Category filter (Phase 4a). View state only, not persisted. -->
-  @if (categories().length > 0) {
-    <div class="category-filter">
-      <span class="filter-label">Category:</span>
+  <!-- Category filter (Phase 4a) and Archived toggle (Phase 4b). View state only, not persisted. -->
+  <div class="controls-bar">
+    @if (categories().length > 0) {
+      <div class="category-filter">
+        <span class="filter-label">Category:</span>
+        <button
+          class="filter-chip"
+          [class.active]="categoryFilter() === null"
+          (click)="categoryFilter.set(null)"
+        >
+          All
+        </button>
+        @for (cat of categories(); track cat) {
+          <button
+            class="filter-chip"
+            [class.active]="categoryFilter() === cat"
+            (click)="categoryFilter.set(cat)"
+          >
+            {{ cat }}
+          </button>
+        }
+        @if (hasUncategorised()) {
+          <button
+            class="filter-chip"
+            [class.active]="categoryFilter() === uncategorised"
+            (click)="categoryFilter.set(uncategorised)"
+          >
+            Uncategorised
+          </button>
+        }
+      </div>
+    }
+
+    <!-- Show archived toggle (Phase 4b) -->
+    <div class="archived-toggle">
       <button
-        class="filter-chip"
-        [class.active]="categoryFilter() === null"
-        (click)="categoryFilter.set(null)"
+        class="toggle-button"
+        [class.active]="showArchived()"
+        (click)="showArchived.set(!showArchived())"
       >
-        All
+        @if (showArchived()) {
+          Hide archived
+        } @else {
+          Show archived
+        }
       </button>
-      @for (cat of categories(); track cat) {
-        <button
-          class="filter-chip"
-          [class.active]="categoryFilter() === cat"
-          (click)="categoryFilter.set(cat)"
-        >
-          {{ cat }}
-        </button>
-      }
-      @if (hasUncategorised()) {
-        <button
-          class="filter-chip"
-          [class.active]="categoryFilter() === uncategorised"
-          (click)="categoryFilter.set(uncategorised)"
-        >
-          Uncategorised
-        </button>
-      }
     </div>
-  }
+  </div>
 
   <!-- Shared suggestion list for the category input -->
   <datalist id="category-suggestions">
@@ -107,10 +124,11 @@
         <div
           class="habit-item"
           [class.not-due-today]="!isDueToday(habit.id)"
+          [class.archived]="isArchived(habit.id)"
           [style.border-left-color]="colorHex(habit)"
         >
-          @if (editingId() === habit.id) {
-            <!-- Inline edit form (Phase 4a) -->
+          @if (editingId() === habit.id && !isArchived(habit.id)) {
+            <!-- Inline edit form (Phase 4a, Phase 4b: not available in archived view) -->
             <div class="edit-form">
               <label class="edit-field">
                 <span class="edit-label">Name</span>
@@ -193,6 +211,26 @@
                 ></textarea>
               </label>
 
+              <label class="edit-field">
+                <span class="edit-label">Start Date</span>
+                <input
+                  type="date"
+                  [ngModel]="draftStartDate()"
+                  (ngModelChange)="draftStartDate.set($event)"
+                  class="habit-input"
+                />
+              </label>
+
+              @if (backdateWarning()) {
+                <p class="backdate-warning" role="status">
+                  ⚠️ {{ backdateWarning() }} days before today will count as missed.
+                </p>
+              } @else if (isFutureStartDate()) {
+                <p class="future-warning" role="status">
+                  📅 This habit won't be due until {{ draftStartDate() }}.
+                </p>
+              }
+
               <div class="edit-field">
                 <span class="edit-label">Schedule</span>
                 <div class="schedule-picker">
@@ -249,37 +287,94 @@
               </div>
             </div>
           } @else {
-            <div class="habit-main">
-              <label class="habit-checkbox">
-                <input
-                  type="checkbox"
-                  [checked]="isDoneToday(habit.id)"
-                  (change)="toggleToday(habit.id)"
-                />
-                <span class="habit-icon" aria-hidden="true">{{ iconGlyph(habit) }}</span>
-                <span class="habit-name">{{ habit.name }}</span>
-              </label>
+            @if (isArchived(habit.id)) {
+              <!-- Archived view: simplified display with only Reactivate action -->
+              <div class="habit-main archived-main">
+                <label class="habit-checkbox">
+                  <span class="habit-icon" aria-hidden="true">{{ iconGlyph(habit) }}</span>
+                  <span class="habit-name archived-name">{{ habit.name }}</span>
+                </label>
 
-              @if (habit.description) {
-                <p class="habit-description">{{ habit.description }}</p>
-              }
-
-              <div class="habit-meta">
-                @if (habit.category) {
-                  <span class="category-chip">{{ habit.category }}</span>
+                @if (habit.description) {
+                  <p class="habit-description">{{ habit.description }}</p>
                 }
-                <span class="schedule-label">{{ getScheduleLabel(habit.id) }}</span>
-                <span class="streak-info">{{ getCurrentStreak(habit.id) }} 🔥</span>
-                <span class="best-streak">best: {{ getLongestStreak(habit.id) }}</span>
-                @if (!isDueToday(habit.id)) {
-                  <span class="not-scheduled">not today</span>
+
+                <div class="habit-meta">
+                  @if (habit.category) {
+                    <span class="category-chip">{{ habit.category }}</span>
+                  }
+                  <span class="schedule-label">{{ getScheduleLabel(habit.id) }}</span>
+                  <span class="streak-info">{{ getCurrentStreak(habit.id) }} 🔥</span>
+                  <span class="best-streak">best: {{ getLongestStreak(habit.id) }}</span>
+                </div>
+              </div>
+              <div class="habit-actions">
+                <button (click)="reactivate(habit.id)" class="reactivate-button">Reactivate</button>
+              </div>
+            } @else {
+              <!-- Active view: full display with Edit, Pause/Resume, Archive, Delete -->
+              <div class="habit-main">
+                <div class="habit-header">
+                  <label class="habit-checkbox">
+                    <input
+                      type="checkbox"
+                      [checked]="isDoneToday(habit.id)"
+                      (change)="toggleToday(habit.id)"
+                    />
+                    <span class="habit-icon" aria-hidden="true">{{ iconGlyph(habit) }}</span>
+                    <span class="habit-name">{{ habit.name }}</span>
+                  </label>
+
+                  @if (isPaused(habit.id)) {
+                    <span class="paused-badge">Paused</span>
+                  }
+                </div>
+
+                @if (habit.description) {
+                  <p class="habit-description">{{ habit.description }}</p>
+                }
+
+                @if (isPaused(habit.id)) {
+                  <p class="paused-since">{{ getPausedSinceLabel(habit) }}</p>
+                }
+
+                <div class="habit-meta">
+                  @if (habit.category) {
+                    <span class="category-chip">{{ habit.category }}</span>
+                  }
+                  <span class="schedule-label">{{ getScheduleLabel(habit.id) }}</span>
+                  <span class="streak-info">{{ getCurrentStreak(habit.id) }} 🔥</span>
+                  <span class="best-streak">best: {{ getLongestStreak(habit.id) }}</span>
+                  @if (!isDueToday(habit.id)) {
+                    <span class="not-scheduled">not today</span>
+                  }
+                  @if (getCompletionPercentageForHabit(habit)) {
+                    <span class="completion-rate">{{ getCompletionPercentageForHabit(habit) }}</span>
+                  } @else if (getStartsLabel(habit)) {
+                    <span class="starts-label">{{ getStartsLabel(habit) }}</span>
+                  }
+                </div>
+              </div>
+              <div class="habit-actions">
+                @if (!isPaused(habit.id)) {
+                  <button (click)="pause(habit.id)" class="pause-button">Pause</button>
+                } @else {
+                  <button (click)="resume(habit.id)" class="resume-button">Resume</button>
+                }
+                <button (click)="startEdit(habit)" class="edit-button">Edit</button>
+                <button (click)="archive(habit.id)" class="archive-button">Archive</button>
+                @if (isConfirmingDelete(habit.id)) {
+                  <button (click)="remove(habit.id)" class="delete-button confirming">
+                    Delete?
+                  </button>
+                  <button (click)="cancelDelete()" class="cancel-delete-button">Cancel</button>
+                } @else {
+                  <button (click)="toggleDeleteConfirm(habit.id)" class="delete-button">
+                    Delete
+                  </button>
                 }
               </div>
-            </div>
-            <div class="habit-actions">
-              <button (click)="startEdit(habit)" class="edit-button">Edit</button>
-              <button (click)="remove(habit.id)" class="delete-button">Delete</button>
-            </div>
+            }
           }
         </div>
       }

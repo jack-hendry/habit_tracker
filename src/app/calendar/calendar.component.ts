@@ -13,7 +13,7 @@ import { Habit, colorOf, iconOf } from '../habit/habit.model';
 })
 export class CalendarComponent {
   private readonly habitService = inject(HabitService);
-  readonly habits = this.habitService.habits;
+  readonly habits = this.habitService.activeHabits;
 
   readonly selectedId = signal<string | null>(null);
   readonly currentMonth = signal({ year: new Date().getFullYear(), month: new Date().getMonth() });

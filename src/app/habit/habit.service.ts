@@ -1,5 +1,5 @@
-import { Injectable, signal } from '@angular/core';
-import { Habit, HabitPatch, Schedule, isHabit, isSchedule, DayStatus } from './habit.model';
+import { Injectable, signal, computed } from '@angular/core';
+import { Habit, HabitPatch, Schedule, isHabit, isSchedule, DayStatus, ISO_DATE, PausedRange } from './habit.model';
 
 /**
  * Client-side habit store, persisted to localStorage (no backend, no accounts,
@@ -17,6 +17,13 @@ export class HabitService {
   readonly habits = this._habits.asReadonly();
 
   /**
+   * Habits excluding archived ones. Components should use this by default;
+   * `habits()` is reserved for the archived view and tests (habit-lifecycle
+   * CriticReview R10).
+   */
+  readonly activeHabits = computed(() => this._habits().filter((h) => h.status !== 'archived'));
+
+  /**
    * Today's calendar date as `YYYY-MM-DD` in the user's **local** timezone.
    * Deliberately not `toISOString()`, which is UTC and would misattribute
    * evening/early-morning completions to the wrong day.
@@ -30,12 +37,16 @@ export class HabitService {
   }
 
   /**
-   * The habit's **local** created date as `YYYY-MM-DD`. `createdAt` is a UTC
-   * instant; the streak/due boundary is a local calendar day, so both `isDueOn`
-   * and `currentStreak` must derive it the same way (CriticReview R5).
+   * The habit's start date as `YYYY-MM-DD` (local). For new habits, this is
+   * `startDate`. For legacy habits (pre-4b), it is backfilled from `createdAt`'s
+   * local date in `load()` (habit-lifecycle CriticReview R7). This function
+   * guards both cases: it reads `startDate` if set, or computes from `createdAt`
+   * as a fallback for habits constructed in memory. All five derivations
+   * (`isDueOn`, `currentStreak`, `longestStreak`, `completionRate`, `isLapsed`)
+   * use this single computation so the boundary cannot drift (R7).
    */
-  private static createdIso(habit: Habit): string {
-    return HabitService.todayIso(new Date(habit.createdAt));
+  private static startIso(habit: Habit): string {
+    return habit.startDate ?? HabitService.todayIso(new Date(habit.createdAt));
   }
 
   /**
@@ -60,28 +71,31 @@ export class HabitService {
     if (!trimmed || !isSchedule(schedule)) {
       return;
     }
+    const now = new Date();
     const habit: Habit = {
       id: crypto.randomUUID(),
       name: trimmed,
-      createdAt: new Date().toISOString(),
+      createdAt: now.toISOString(),
       completedDates: [],
       schedule,
+      startDate: HabitService.todayIso(now),
     };
     this._habits.update((list) => [...list, habit]);
     this.persist();
   }
 
   /**
-   * Edit a habit's name, schedule, or metadata (Phase 4a). The only mutation
-   * that is not add/remove/toggle.
+   * Edit a habit's name, schedule, metadata (Phase 4a), or start date (Phase 4b).
+   * The only mutation that is not add/remove/toggle.
    *
-   * Validation is **atomic** (CriticReview R2): every key present in the patch is
-   * checked before anything is applied, so a patch with a good `name` and a
-   * malformed `schedule` changes nothing at all rather than half-applying a
-   * rename the user never asked for on its own.
+   * Validation is **atomic** (CriticReview R2, habit-lifecycle R3): every key
+   * present in the patch is checked before anything is applied, so a patch with a
+   * good `name` and a malformed `startDate` changes nothing at all rather than
+   * half-applying a rename the user never asked for on its own.
    *
-   * `HabitPatch` cannot express `id`/`createdAt`/`completedDates`, so metadata
-   * editing provably cannot rewrite identity or history (CriticReview R1).
+   * `HabitPatch` cannot express `id`/`createdAt`/`completedDates`/`status`/
+   * `pausedRanges`, so editing provably cannot rewrite identity or history
+   * (CriticReview R1, habit-lifecycle R3).
    *
    * Note the asymmetry (CriticReview R4): `name` is *required-and-validated* —
    * a blank one rejects the call — whereas the prose metadata fields are
@@ -99,6 +113,9 @@ export class HabitService {
       return;
     }
     if (patch.schedule !== undefined && !isSchedule(patch.schedule)) {
+      return;
+    }
+    if (patch.startDate !== undefined && !ISO_DATE.test(patch.startDate)) {
       return;
     }
 
@@ -123,6 +140,7 @@ export class HabitService {
       // Palette ids, not prose — stored as given, empty string clears.
       color: patch.color === undefined ? existing.color : patch.color || undefined,
       icon: patch.icon === undefined ? existing.icon : patch.icon || undefined,
+      startDate: patch.startDate === undefined ? existing.startDate : patch.startDate,
     };
 
     this._habits.update((list) => list.map((h) => (h.id === id ? updated : h)));
@@ -159,12 +177,125 @@ export class HabitService {
   }
 
   /**
-   * Was the habit due (scheduled) on `iso`? False before the habit's local
-   * creation date; otherwise `daily` is always due and `weekdays` is due iff the
-   * date's local weekday is listed.
+   * Is `iso` inside any pause range? Uses half-open interval logic (habit-lifecycle
+   * CriticReview R2): a range is `[from, to)`, so `iso` is paused iff
+   * `from <= iso` and (`to` is null or `iso < to`).
+   */
+  isPausedOn(habit: Habit, iso: string): boolean {
+    return (habit.pausedRanges ?? []).some((r) => r.from <= iso && (r.to === null || iso < r.to));
+  }
+
+  /**
+   * Is the habit paused right now? Convenience for the UI.
+   */
+  isPaused(habit: Habit, today: Date = new Date()): boolean {
+    return this.isPausedOn(habit, HabitService.todayIso(today));
+  }
+
+  /**
+   * Pause the habit, starting today. Appends a new open pause range `{ from:
+   * todayIso(), to: null }`. No-op if already paused or archived.
+   */
+  pause(id: string): void {
+    const habit = this._habits().find((h) => h.id === id);
+    if (!habit) {
+      return;
+    }
+    if (this.isPaused(habit) || habit.status === 'archived') {
+      return;
+    }
+    const today = HabitService.todayIso();
+    const updated = {
+      ...habit,
+      pausedRanges: [...(habit.pausedRanges ?? []), { from: today, to: null }],
+    };
+    this._habits.update((list) => list.map((h) => (h.id === id ? updated : h)));
+    this.persist();
+  }
+
+  /**
+   * Resume the habit by closing the open pause range with `to = todayIso()`.
+   * No-op if not paused.
+   */
+  resume(id: string): void {
+    const habit = this._habits().find((h) => h.id === id);
+    if (!habit) {
+      return;
+    }
+    const ranges = habit.pausedRanges ?? [];
+    const openIndex = ranges.findIndex((r) => r.to === null);
+    if (openIndex === -1) {
+      return;
+    }
+    const today = HabitService.todayIso();
+    const newRanges = [...ranges];
+    newRanges[openIndex] = { from: newRanges[openIndex].from, to: today };
+    const updated = { ...habit, pausedRanges: newRanges };
+    this._habits.update((list) => list.map((h) => (h.id === id ? updated : h)));
+    this.persist();
+  }
+
+  /**
+   * Archive the habit. First closes any open pause range, then opens a fresh one
+   * covering the archived stretch (habit-lifecycle CriticReview R5, R6), and sets
+   * `status: 'archived'`. No-op if already archived.
+   */
+  archive(id: string): void {
+    const habit = this._habits().find((h) => h.id === id);
+    if (!habit) {
+      return;
+    }
+    if (habit.status === 'archived') {
+      return;
+    }
+    const ranges = [...(habit.pausedRanges ?? [])];
+    const openIndex = ranges.findIndex((r) => r.to === null);
+    if (openIndex !== -1) {
+      const today = HabitService.todayIso();
+      ranges[openIndex] = { from: ranges[openIndex].from, to: today };
+    }
+    const today = HabitService.todayIso();
+    ranges.push({ from: today, to: null });
+    const updated = { ...habit, pausedRanges: ranges, status: 'archived' as const };
+    this._habits.update((list) => list.map((h) => (h.id === id ? updated : h)));
+    this.persist();
+  }
+
+  /**
+   * Reactivate an archived habit. Closes the open pause range (which covers the
+   * archived stretch) and sets `status: 'active'`. No-op if not archived.
+   */
+  reactivate(id: string): void {
+    const habit = this._habits().find((h) => h.id === id);
+    if (!habit) {
+      return;
+    }
+    if (habit.status !== 'archived') {
+      return;
+    }
+    const ranges = [...(habit.pausedRanges ?? [])];
+    const openIndex = ranges.findIndex((r) => r.to === null);
+    if (openIndex !== -1) {
+      const today = HabitService.todayIso();
+      ranges[openIndex] = { from: ranges[openIndex].from, to: today };
+    }
+    const updated = { ...habit, pausedRanges: ranges, status: 'active' as const };
+    this._habits.update((list) => list.map((h) => (h.id === id ? updated : h)));
+    this.persist();
+  }
+
+  /**
+   * Was the habit due (scheduled) on `iso`? False before the habit's start date
+   * (habit-lifecycle CriticReview R8), inside any pause range (R2), or if the
+   * date doesn't match the schedule. Clauses ordered `startDate` → pause →
+   * schedule: a day before the habit existed is not-due regardless of every
+   * other consideration.
    */
   isDueOn(habit: Habit, iso: string): boolean {
-    if (iso < HabitService.createdIso(habit)) {
+    if (iso < HabitService.startIso(habit)) {
+      return false;
+    }
+    if (this.isPausedOn(habit, iso)) {
       return false;
     }
     return habit.schedule.type === 'daily'
@@ -177,16 +308,17 @@ export class HabitService {
    * were completed. Non-due days are skipped (no penalty). The first missed due
    * day stops the count. Grace scoped to today only (CriticReview R3): if today
    * is due but not yet completed, the day isn't over, so it is skipped rather
-   * than breaking the streak. Bounded below by the creation date (CriticReview R4).
+   * than breaking the streak. Bounded below by the start date (habit-lifecycle
+   * CriticReview R7).
    */
   currentStreak(habit: Habit, today: Date = new Date()): number {
     const todayIso = HabitService.todayIso(today);
-    const createdIso = HabitService.createdIso(habit);
+    const startIso = HabitService.startIso(habit);
     const completed = new Set(habit.completedDates);
 
     let count = 0;
     let cursor = todayIso;
-    while (cursor >= createdIso) {
+    while (cursor >= startIso) {
       if (this.isDueOn(habit, cursor)) {
         const done = completed.has(cursor);
         if (!done) {
@@ -204,17 +336,17 @@ export class HabitService {
   }
 
   /**
-   * Longest run of consecutive completed **due** days between the creation date
-   * and today (inclusive). Survives a current-streak reset.
+   * Longest run of consecutive completed **due** days between the start date and
+   * today (inclusive). Survives a current-streak reset.
    */
   longestStreak(habit: Habit, today: Date = new Date()): number {
     const todayIso = HabitService.todayIso(today);
-    const createdIso = HabitService.createdIso(habit);
+    const startIso = HabitService.startIso(habit);
     const completed = new Set(habit.completedDates);
 
     let best = 0;
     let run = 0;
-    let cursor = createdIso;
+    let cursor = startIso;
     while (cursor <= todayIso) {
       if (this.isDueOn(habit, cursor)) {
         if (completed.has(cursor)) {
@@ -276,12 +408,12 @@ export class HabitService {
    */
   completionRate(habit: Habit, today: Date = new Date()): number {
     const todayIso = HabitService.todayIso(today);
-    const createdIso = HabitService.createdIso(habit);
+    const startIso = HabitService.startIso(habit);
 
     let completed = 0;
     let countable = 0;
 
-    let cursor = createdIso;
+    let cursor = startIso;
     while (cursor <= todayIso) {
       if (this.isDueOn(habit, cursor)) {
         const status = this.dayStatus(habit, cursor, today);
@@ -305,16 +437,16 @@ export class HabitService {
   }
 
   /**
-   * True iff there is ≥1 missed day in [createdIso .. yesterday]. A pending
+   * True iff there is ≥1 missed day in [startDate .. yesterday]. A pending
    * today does NOT make a habit lapsed (CriticReview R4). Short-circuits on the
    * first missed day.
    */
   isLapsed(habit: Habit, today: Date = new Date()): boolean {
     const todayIso = HabitService.todayIso(today);
-    const createdIso = HabitService.createdIso(habit);
+    const startIso = HabitService.startIso(habit);
     const yesterdayIso = HabitService.prevIso(todayIso);
 
-    let cursor = createdIso;
+    let cursor = startIso;
     while (cursor <= yesterdayIso) {
       if (this.dayStatus(habit, cursor, today) === 'missed') {
         return true;
@@ -393,6 +525,11 @@ export class HabitService {
    * parse error → empty; malformed rows are dropped and valid habits survive.
    * Migration (CriticReview R1): a legacy row with **no** `schedule` is backfilled
    * to `daily`. Malformed schedules were already dropped by `isHabit`.
+   *
+   * Phase 4b migration (habit-lifecycle CriticReview R7): a legacy row with **no**
+   * `startDate` is backfilled to the local date of `createdAt`, which is precisely
+   * what `startIso` computes for habits without `startDate`. This preserves all
+   * existing streaks, rates, and calendars bit-identically.
    */
   private load(): Habit[] {
     try {
@@ -404,12 +541,18 @@ export class HabitService {
       if (!Array.isArray(parsed)) {
         return [];
       }
-      return parsed.filter(isHabit).map((h) =>
+      return parsed.filter(isHabit).map((h) => {
+        let updated = h as Partial<Habit>;
         // Legacy Phase 1 row passed isHabit without a schedule — backfill it.
-        (h as Partial<Habit>).schedule === undefined
-          ? { ...h, schedule: { type: 'daily' as const } }
-          : h,
-      );
+        if (updated.schedule === undefined) {
+          updated = { ...updated, schedule: { type: 'daily' as const } };
+        }
+        // Legacy pre-4b row passed isHabit without a startDate — backfill it.
+        if (updated.startDate === undefined) {
+          updated = { ...updated, startDate: HabitService.todayIso(new Date(h.createdAt)) };
+        }
+        return updated as Habit;
+      });
     } catch {
       return [];
     }
