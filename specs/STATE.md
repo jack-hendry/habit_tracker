@@ -240,7 +240,7 @@ entirely.
 | **4b** | Habit lifecycle (start date, pause, archive, reactivate, delete-confirm) | ✅ Done | `archive/2026-07-23-habit-lifecycle/` |
 | **4c** | Completion types (count / duration / numeric / checklist, storage v2) | 📋 Planned | — (see `phase-4-plan.md`) |
 | **5** | Notifications (time-based reminders, PWA) | 📋 Planned | — |
-| **R0** | Redesign §0 — global shell (top bar, tokens, 2 stub routes) | ✅ Done, unmerged | `global-shell/` |
+| **R0** | Redesign §0 — global shell (top bar, tokens, 2 stub routes) | ✅ Done, unmerged | `archive/2026-07-26-global-shell/` |
 | **R1–R5** | Redesign §1–§5 (Dashboard, Habits, Calendar, Analytics, Stacks) | 📋 Planned | — (see `design-implementation-roadmap.md`) |
 | — | Angular 17 → 21 upgrade (four major hops) | ✅ Done | `archive/2026-07-17-upgrade-angular-21/` |
 
