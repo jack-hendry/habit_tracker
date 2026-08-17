@@ -16,4 +16,17 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./calendar/calendar.component').then((m) => m.CalendarComponent),
   },
+  {
+    path: 'analytics',
+    loadComponent: () =>
+      import('./analytics/analytics.component').then((m) => m.AnalyticsComponent),
+  },
+  {
+    path: 'stacks',
+    loadComponent: () =>
+      import('./stacks/stacks.component').then((m) => m.StacksComponent),
+  },
+  // Last by necessity — Angular matches in order. A one-line redirect to
+  // Dashboard, not a designed 404 page (CriticReview R7).
+  { path: '**', redirectTo: '' },
 ];

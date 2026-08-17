@@ -349,7 +349,59 @@ while every "Done when" still reported green).
 
 ## 6. Retrospective
 
-*(Filled after the slice ships, per TEMPLATE.md.)*
+*(Filled 2026-07-26, after the slice shipped. All nine acceptance criteria pass —
+evidence below.)*
 
-- Did Analyst.md catch anything not thought about up front?
-- Did anything in tasks.md turn out to be wrong during coding? What?
+**Did Analyst.md catch anything not thought about up front?**
+
+Yes — three things, all from the harden round rather than the first draft, which
+is the round doing its job.
+
+- **R1 (no global font).** The strongest catch. The original token table was
+  entirely colours and radii; the app set no `font-family` anywhere, so Phase 0
+  would have shipped correct hexes in the browser's default serif. That single
+  delta would have dominated the design composite and made every later section's
+  comparison untrustworthy. Fixing it also silently repaired the ten
+  `font-family: inherit` rules in `habit-list.component.scss`, which had been
+  inheriting from nothing.
+- **R4 (AC 8 could not pass).** The criterion as first written demanded a
+  full-page match on a slice that deliberately leaves page interiors unstyled.
+  Left in, it would have pulled the executor into restyling the Dashboard —
+  scope creep into roadmap §1 dressed up as "making the test pass".
+- **R11/R12 (the fold-back audit).** Two corrections were argued in the body and
+  never reached §4. R12 is the one worth remembering: a `<router-outlet>` capped
+  at 1150px would have overridden all five per-page widths *while every "Done
+  when" still reported green*. Recorded as **L-010**.
+
+**Did anything in tasks.md turn out to be wrong during coding?**
+
+One value, and it was found by measurement rather than by the build.
+
+- **`.nav { gap }` was specified as `3px`; the mockup uses `2px`.** Every step
+  passed its "Done when" and the bar looked right in the side-by-side composite,
+  but bounding-box measurement of `design/target/dashboard.png` against
+  `design/actual/dashboard.png` showed the nav accumulating ~1px of drift per
+  item — 4px by "Stacks". Corrected in `app.component.scss`; drift is now ≤0.5px
+  (antialiasing noise) on all five items. Recorded as **L-011**. Note the values
+  the spec *did* sample from the prototype source — 54px bar, 22×22 logo, 96×30
+  active pill, 28px bar padding, `#f7f7f5` / `#e8e8e6` — were all confirmed
+  pixel-exact, so the sampling method was sound and this was a single miss.
+- **A process trap, not a spec defect:** the first design capture screenshotted a
+  *different project's* app, because port 4200 was already taken and
+  `design-shot.mjs` silently succeeded against it. `assertServerUp` proves
+  something is listening, not that it is this app. Worked around with
+  `DESIGN_BASE_URL` + `--port 4300`; also in L-011.
+
+**Acceptance criteria — evidence**
+
+| AC | Result | Evidence |
+|---|---|---|
+| 1 — 5 nav items, tinted active pill, exact-match `/` | ✅ | Active pill measured at x=172, 96×30, `#e9f1fa` — identical to target. Per-route check: `/` lights only Dashboard, `/habits` only Habits |
+| 2 — `/analytics` + `/stacks` resolve, no console errors | ✅ | Playwright pass over all six URLs: `errors=[]` on every one; `h1` = `Analytics` / `Habit Stacks` |
+| 3 — logo + wordmark + right-aligned date | ✅ | `formatBarDate(new Date(2026, 6, 23)) === 'Thu · Jul 23, 2026'` passes with a pinned `'en-US'`; bar renders `Sun · Jul 26, 2026` (live date, correct format) |
+| 4 — sticky bar, `body` + wrapper carry `--page-bg`, no shell max-width | ✅ | `getComputedStyle(.topbar).position === 'sticky'` on all six routes; page bg `#f7f7f5` at y=70; `grep max-width app.component.scss` → no hits; all pre-existing specs pass unmodified |
+| 5 — tokens on `:root`, shell consumes them | ✅ | `grep -E '#[0-9a-fA-F]{3,6}' src/app/app.component.scss` → no hits |
+| 6 — `npm test` green | ✅ | **115 SUCCESS** (was 107) |
+| 7 — build succeeds, no new budget error | ✅ | Build clean; the only budget warning is the pre-existing `habit-list.component.scss` 7.82 kB (untouched by this slice, tracked as a Quick Task) |
+| 8 — design check, bar strip only | ✅ | Bar bottom border at y=54 `#e8e8e6`, logo 22×22 at x=28,y=16, pill 96×30 at x=172 — all identical to target. Nav text runs within 0.5px on all five items after the gap fix |
+| 9 — unknown URL redirects; `ROUTES` map extended | ✅ | `/nonsense` → `/`, Dashboard active; `ROUTES` in `design-shot.mjs` has `analytics` + `stacks` |

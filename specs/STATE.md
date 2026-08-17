@@ -104,6 +104,20 @@ the `## Executing: <spec>` marker that `enforce-haiku-tasks-pretooluse.sh`
 greps for, plus a pointer here — the hook reads the repo root and is not worth
 re-pointing.
 
+**AD-009 — The redesign's visual language lives as CSS custom properties on
+`:root` in `src/styles.scss`; there is no shell-level content width.**
+(2026-07-26, `global-shell` §2.5, R10/R12) Two halves of one decision. (a)
+Colours, radii, the content padding and the font family are declared once as
+tokens — including the status accents, declared ahead of their first use so
+roadmap §1–§3 *consume* rather than re-sample them. The accepted cost is a few
+inert `:root` lines until their section lands; the alternative is three sections
+each sampling their own green. Hex literals are banned from component SCSS for
+any value that has a token. (b) The shell imposes **no** `max-width` on
+`<router-outlet>` — the prototype gives each page its own centered column
+(Dashboard 960 / Habits 1000 / Calendar 900 / Analytics 1000 / Stacks 900), so
+the width is a per-page concern. The roadmap's "~1150px shell column" was a
+paraphrase and is superseded.
+
 ## Blockers
 
 **B-001 — The Haiku-enforcement hook denied every non-`.md` edit in the repo.**
@@ -177,6 +191,29 @@ backfill was checked call site by call site against the expression it replaced
 what let the slice skip a `STORAGE_KEY` bump and demand bit-identical numbers.
 Corollary: delete the old helper, don't leave two ways to compute one boundary.
 
+**L-010 — An acceptance criterion that contradicts the body of its own spec gets
+implemented as written.** (`global-shell` R11/R12) Two criteria in §4 still
+carried the roadmap paraphrases the body existed to overturn — a "filled blue
+pill" and a "~1150px column". §4 is the section an executor treats as the
+contract, so the corrections in §2.2/§2.3 would have lost to them. The R12 case
+is the dangerous shape: a wrong constraint that is *also self-verifying* —
+wrapping `<router-outlet>` at 1150px would have overridden all five per-page
+widths while every "Done when" still reported green. When a harden round
+overturns a claim, grep the acceptance criteria for the old wording; a fold-back
+audit is not optional.
+
+**L-011 — Verify design values against the committed mockup's pixels, not
+against the eye.** (`global-shell`, Phase 0 design check) Reading
+`design/target/dashboard.png` visually suggested a ~27px logo; measuring the
+PNG's bounding boxes gave exactly the 22px the spec had sampled. The same
+measurement then caught a real defect the composite hid — nav items drifting 1px
+each, 4px by the fifth, from a `gap` specified as 3px where the mockup used 2px.
+A side-by-side composite is for judging *whether* something is off; a bounding
+box on the target file is for finding *what*. Corollary: check which app is
+actually on the dev-server port before believing a screenshot — port 4200 was
+serving a different project, and the first "actual" capture was someone else's UI
+entirely.
+
 ## Quick Tasks
 
 *Small work done without a spec (3 files or fewer, one sentence describes it).*
@@ -203,15 +240,23 @@ Corollary: delete the old helper, don't leave two ways to compute one boundary.
 | **4b** | Habit lifecycle (start date, pause, archive, reactivate, delete-confirm) | ✅ Done | `archive/2026-07-23-habit-lifecycle/` |
 | **4c** | Completion types (count / duration / numeric / checklist, storage v2) | 📋 Planned | — (see `phase-4-plan.md`) |
 | **5** | Notifications (time-based reminders, PWA) | 📋 Planned | — |
+| **R0** | Redesign §0 — global shell (top bar, tokens, 2 stub routes) | ✅ Done, unmerged | `global-shell/` |
+| **R1–R5** | Redesign §1–§5 (Dashboard, Habits, Calendar, Analytics, Stacks) | 📋 Planned | — (see `design-implementation-roadmap.md`) |
 | — | Angular 17 → 21 upgrade (four major hops) | ✅ Done | `archive/2026-07-17-upgrade-angular-21/` |
 
 ## Notes
 
-- Router: `/` = Dashboard, `/habits` = Manage, `/calendar` = per-habit monthly view.
+- Router: `/` = Dashboard, `/habits` = Manage, `/calendar` = per-habit monthly
+  view, `/analytics` + `/stacks` = redesign stubs (roadmap §4/§5 replace them),
+  `**` → Dashboard.
 - Service derivations: `dayStatus`, `completionRate`, `isLapsed`, `monthGrid`,
   `isDueOn`, `currentStreak`, `longestStreak` — all pure, all live (AD-004).
-- Test baseline after 4b: **107** passing
-  (`npx ng test --watch=false --browsers=ChromeHeadless`).
+- Test baseline after redesign §0 (`global-shell`): **115** passing
+  (`npx ng test --watch=false --browsers=ChromeHeadless`). Was 107 after 4b;
+  §0 added 3 `formatBarDate` specs, 3 routing specs and 2 shell specs.
+- Design comparison needs `DESIGN_BASE_URL` when port 4200 is taken by another
+  project: `DESIGN_BASE_URL=http://localhost:4300 npm run design:shot -- <name>`
+  against `npx ng serve --port 4300`. See L-011.
 - 4c is the slice that bumps `STORAGE_KEY` to v2 — deliberately not done earlier
   (`habit-metadata` R6), so the one-way migration is spent on a settled model.
 - See `ROADMAP.md` for the product vision, `phase-4-plan.md` for the 4a/4b/4c

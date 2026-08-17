@@ -1,1 +1,62 @@
-/* You can add global styles to this file, and also import other style files */
+/* ---------------------------------------------------------------------------
+   Design tokens — the single source of truth for the redesign's visual
+   language (specs/global-shell/Analyst.md §2.5). Values sampled from the
+   Claude Design prototype source, not eyeballed. Components consume these; no
+   hard-coded hex belongs in a component's SCSS for a value that has a token.
+   --------------------------------------------------------------------------- */
+:root {
+  /* Surfaces & text */
+  --page-bg: #f7f7f5;
+  --surface: #fff;
+  --border: #e8e8e6;
+  --text-strong: #16181c;
+  --text: #4c5057;
+  --text-muted: #8a8f96;
+  --nav-inactive: #565b63;
+
+  /* Accent */
+  --accent: #0066cc;
+  --accent-tint: #e9f1fa;
+
+  /* Controls */
+  --chip-bg: #f1f1ef;
+  --control-border: #d7d7d4;
+  --checkbox-border: #c9cdd2;
+
+  /* Radii */
+  --radius-card: 8px;
+  --radius-control: 6px;
+  --radius-pill: 999px;
+
+  /* Layout */
+  --content-pad: 28px 24px 48px;
+
+  /* Typography */
+  --font-sans: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+
+  /* Status accents — declared ahead of first use so roadmap §1–§3 consume
+     rather than re-sample them (Analyst §2.5, CriticReview R10). Unused in
+     Phase 0 by design. */
+  --done: #22c55e;
+  --done-bg: #f4fbf6;
+  --done-border: #e2f0e6;
+  --done-text: #166534;
+  --missed: #ef4444;
+  --missed-bg: #fdf4f4;
+  --missed-border: #f3dede;
+  --danger-text: #c92a2a;
+  --danger-border: #eec4c4;
+  --pending: #f59e0b;
+  --pending-bg: #fef3c7;
+  --pending-text: #92400e;
+  --row-neutral: #dcdcd9;
+}
+
+/* `margin: 0` makes the sticky bar genuinely full-bleed; the background is on
+   `body` as well as the shell wrapper so a short page shows gray, not white,
+   on overscroll (CriticReview R2). */
+body {
+  margin: 0;
+  background: var(--page-bg);
+  font-family: var(--font-sans);
+}

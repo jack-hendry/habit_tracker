@@ -21,6 +21,8 @@ const ROUTES = {
   dashboard: '/',
   habits: '/habits',
   calendar: '/calendar',
+  analytics: '/analytics',
+  stacks: '/stacks',
 };
 
 // Each column in the composite is capped at this width. Keeps the output legible
