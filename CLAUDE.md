@@ -10,6 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - When executing steps from a `tasks.md` file, use the Haiku model (`--model haiku`) for faster, cost-efficient execution.
 - Project memory lives in `specs/STATE.md`: architectural decisions (`AD-NNN`), blockers (`B-NNN`), lessons (`L-NNN`), Quick Tasks, phase status. Append-only, never renumbered. Root `STATE.md` is only the run marker the hook greps for.
 - When a feature is finished, follow the archive ritual in `specs/STATE.md`: re-read the spec, add the `AD`/`L` entries it produced, move the folder to `specs/archive/YYYY-MM-DD-<name>/`, and put **both** changes in the same commit.
+- End-of-feature ritual, in order: (1) update any docs the feature touched, (2) write the `AD`/`B`/`L` entries the spec produced into `specs/STATE.md`, (3) **summarize the spec down to what matters** — the final `Analyst.md`, the decisions, and what changed from the plan; delete drafts and long back-and-forth notes so the archived folder is small, (4) move the summarized folder to `specs/archive/YYYY-MM-DD-<name>/` and push both the archive move and the `STATE.md` update together. A `pre-push` git hook (`scripts/clean-table-check.sh`, wired via `.pre-commit-config.yaml`) enforces steps 2–4: it blocks a push that adds files under `specs/archive/` without a matching `specs/STATE.md` change, and blocks any newly archived file over 20 KB with "Summarize this spec before archiving." The hook checks — it never edits or commits for you. It's a client-side git hook, so `git push --no-verify` bypasses it entirely; it's a reminder for the honest case, not a guarantee.
 - Before starting a `tasks.md` run, add a `## Executing: <spec-dir-name>` line to the root `STATE.md`, and remove it when the run finishes. The `enforce-haiku-tasks-pretooluse.sh` hook keys off that marker to block direct top-level edits during a run — without it the hook stays dormant, so unrelated Small tasks are never blocked.
 
 ## Task sizing rule (SDD)
@@ -42,6 +43,7 @@ This is a standalone Angular 21.2 application scaffolded via `ng new` (Angular C
 - `npm run design:shot -- <name> [--width 1440] [--viewport-only]` — screenshot a route with Playwright and composite it beside its mockup. Requires the dev server to already be running.
 - There is no e2e test runner configured (`ng e2e` requires adding a package first).
 - There is no lint script configured in `package.json` / `angular.json`.
+- `pip install pre-commit && pre-commit install --hook-type pre-push` — one-time setup per clone to wire the `clean-table-check.sh` pre-push hook (`.pre-commit-config.yaml`). Without this the hook is not installed and pushes are not checked.
 
 ## Design comparison
 
