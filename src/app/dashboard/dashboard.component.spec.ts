@@ -246,4 +246,94 @@ describe('DashboardComponent', () => {
       expect(result).toBeCloseTo(1.0, 2);
     });
   });
+
+  describe('stat row', () => {
+    it('counts only DUE habits in the TODAY card, ignoring an off-schedule tick', () => {
+      // due today (Fri) + done; due today + pending; not due today but ticked.
+      const dueDone = makeHabit({ id: 'a', completedDates: [TODAY_ISO] });
+      const duePending = makeHabit({ id: 'b', completedDates: [] });
+      const offSchedule = makeHabit({
+        id: 'c',
+        schedule: { type: 'weekdays', days: [1] }, // Mondays; today is Friday
+        completedDates: [TODAY_ISO],
+      });
+
+      localStorage.setItem(
+        'habit_tracker.habits.v1',
+        JSON.stringify([dueDone, duePending, offSchedule]),
+      );
+      const c = createComponent().componentInstance;
+
+      expect(c.todayCounts()).toEqual({ due: 2, done: 1 });
+      expect(c.todayPercent()).toBe(50);
+      // The off-schedule completion still shows in the list — both are right.
+      expect(c.doneToday().length).toBe(2);
+    });
+
+    // Two specs, not one: `HabitService` is root-provided and reads
+    // localStorage in its constructor, so a second `createComponent()` inside
+    // one `it` reuses the already-loaded signal and never sees the reseeded
+    // store. A fresh spec gets a fresh TestBed, which is the only reliable
+    // reseed. (Found during coding — see the retrospective.)
+    it('names the owner of the longest RUNNING streak', () => {
+      const broken = makeHabit({
+        id: 'broken',
+        name: 'Broken',
+        completedDates: ['2026-07-13', '2026-07-14', '2026-07-15'], // 16 missed
+      });
+      const running = makeHabit({
+        id: 'running',
+        name: 'Running',
+        icon: 'run',
+        completedDates: ['2026-07-15', '2026-07-16'],
+      });
+
+      localStorage.setItem('habit_tracker.habits.v1', JSON.stringify([broken, running]));
+      const c = createComponent().componentInstance;
+
+      expect(c.topStreak()?.streak).toBe(2);
+      expect(c.topStreakOwner()).toBe('🏃 Running');
+    });
+
+    it('names nobody when no streak is running', () => {
+      localStorage.setItem('habit_tracker.habits.v1', JSON.stringify([makeHabit({ id: 'none' })]));
+      const c = createComponent().componentInstance;
+
+      expect(c.topStreak()).toBeNull();
+      expect(c.topStreakOwner()).toBeNull();
+    });
+
+    it('reports no prior data when the month before last week is empty', () => {
+      // Starts 2026-07-13, so [today-34 … today-7] holds no due day at all.
+      const h = makeHabit({ completedDates: ['2026-07-13', '2026-07-14'] });
+      localStorage.setItem('habit_tracker.habits.v1', JSON.stringify([h]));
+      const c = createComponent().componentInstance;
+
+      expect(c.deltaLabel()).toBe('no prior data');
+      expect(c.deltaTone()).toBe('muted');
+      expect(c.last7Rate()).toBeCloseTo(0.5, 2); // 13,14 done; 15,16 missed
+    });
+
+    it('pools the overall rate instead of averaging per-habit rates', () => {
+      // long: due 13..16, all done → 4/4. short: starts today, nothing resolved.
+      // Mean-of-rates would be (1.0 + 1.0) / 2 = 1.0 for both; pooled is 4/4
+      // here, and the difference shows once `short` misses a day.
+      const long = makeHabit({
+        id: 'long',
+        completedDates: ['2026-07-13', '2026-07-14', '2026-07-15', '2026-07-16'],
+      });
+      const shortMiss = makeHabit({
+        id: 'short',
+        startDate: '2026-07-15',
+        createdAt: '2026-07-15T12:00:00Z',
+        completedDates: [], // 15 and 16 missed
+      });
+
+      localStorage.setItem('habit_tracker.habits.v1', JSON.stringify([long, shortMiss]));
+      const c = createComponent().componentInstance;
+
+      // Pooled: 4 done of 6 countable = 0.666…  Mean-of-rates would be 0.5.
+      expect(c.overallCompletionRate()).toBeCloseTo(4 / 6, 3);
+    });
+  });
 });

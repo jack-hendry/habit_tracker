@@ -1,90 +1,108 @@
-<div class="dashboard-container">
-  <div class="dashboard-header">
+<div class="dashboard">
+  <header class="page-head">
     <h1>Dashboard</h1>
-    <div class="overall-rate">
-      <span class="rate-label">Overall Completion</span>
-      <span class="rate-value">{{ formatOverallRate(overallCompletionRate()) }}</span>
+    <div class="overall">
+      <span class="overall-label">Overall completion</span>
+      <span class="overall-value">{{ formatRate(overallCompletionRate()) }}</span>
     </div>
-  </div>
+  </header>
 
   @if (habits().length === 0) {
     <div class="empty-state">
       <p>Add a habit first.</p>
     </div>
   } @else {
-    <!-- To do today -->
-    <div class="section">
+    <!-- Stat row. Inside the non-empty branch on purpose: four cards reading
+         "0 of 0 done" are not a welcome (CriticReview R2). -->
+    <div class="stat-row">
+      <app-stat-card
+        label="Today"
+        [value]="todayCounts().done + ''"
+        [unit]="'of ' + todayCounts().due + ' done'"
+        [progress]="todayPercent()"
+      />
+      <app-stat-card
+        label="Longest active streak"
+        [value]="(topStreak()?.streak ?? 0) + ''"
+        unit="days"
+        [sub]="topStreakOwner()"
+      />
+      <app-stat-card label="Perfect days" [value]="perfectDays() + ''" sub="every habit done" />
+      <app-stat-card
+        label="Last 7 days"
+        [value]="formatRate(last7Rate())"
+        [sub]="deltaLabel()"
+        [tone]="deltaTone()"
+      />
+    </div>
+
+    <section class="section">
       <h2>To do today</h2>
       @if (todoToday().length === 0) {
         <p class="no-items">Nothing due today!</p>
       } @else {
         <div class="habit-list">
           @for (habit of todoToday(); track habit.id) {
-            <div class="habit-item">
-              <label class="habit-checkbox">
-                <input
-                  type="checkbox"
-                  [checked]="isDoneToday(habit.id)"
-                  (change)="toggleToday(habit.id)"
-                />
-                <span class="habit-badge" aria-hidden="true">
-                  <span class="habit-dot" [style.background-color]="colorHex(habit)"></span>
-                  <span class="habit-icon">{{ iconGlyph(habit) }}</span>
-                </span>
-                <span class="habit-name">{{ habit.name }}</span>
-              </label>
-              <span class="completion-rate">{{ getCompletionPercentage(habit) }}</span>
-            </div>
+            <label class="habit-row">
+              <input
+                class="tick"
+                type="checkbox"
+                [checked]="isDoneToday(habit.id)"
+                (change)="toggleToday(habit.id)"
+              />
+              <span class="dot" aria-hidden="true" [style.background-color]="colorHex(habit)"></span>
+              <span class="glyph" aria-hidden="true">{{ iconGlyph(habit) }}</span>
+              <span class="name">{{ habit.name }}</span>
+              <span class="rate">{{ getCompletionPercentage(habit) }}</span>
+            </label>
           }
         </div>
       }
-    </div>
+    </section>
 
-    <!-- Done today -->
-    <div class="section">
+    <section class="section">
       <h2>Done today</h2>
       @if (doneToday().length === 0) {
         <p class="no-items">No completions yet.</p>
       } @else {
         <div class="habit-list">
           @for (habit of doneToday(); track habit.id) {
-            <div class="habit-item done">
-              <span class="habit-name">
-                <span class="habit-badge" aria-hidden="true">
-                  <span class="habit-dot" [style.background-color]="colorHex(habit)"></span>
-                  <span class="habit-icon">{{ iconGlyph(habit) }}</span>
-                </span>
-                ✓ {{ habit.name }}
-              </span>
-              <span class="completion-rate">{{ getCompletionPercentage(habit) }}</span>
-            </div>
+            <label class="habit-row done">
+              <input
+                class="tick"
+                type="checkbox"
+                [checked]="isDoneToday(habit.id)"
+                (change)="toggleToday(habit.id)"
+              />
+              <span class="dot" aria-hidden="true" [style.background-color]="colorHex(habit)"></span>
+              <span class="glyph" aria-hidden="true">{{ iconGlyph(habit) }}</span>
+              <span class="name">{{ habit.name }}</span>
+              <span class="rate">{{ getCompletionPercentage(habit) }}</span>
+            </label>
           }
         </div>
       }
-    </div>
+    </section>
 
-    <!-- Overdue / slipping -->
-    <div class="section">
+    <section class="section">
       <h2>Overdue / slipping</h2>
       @if (lapsed().length === 0) {
         <p class="no-items">All caught up!</p>
       } @else {
         <div class="habit-list">
           @for (habit of lapsed(); track habit.id) {
-            <div class="habit-item lapsed">
-              <span class="habit-name">
-                <span class="habit-badge" aria-hidden="true">
-                  <span class="habit-dot" [style.background-color]="colorHex(habit)"></span>
-                  <span class="habit-icon">{{ iconGlyph(habit) }}</span>
-                </span>
-                {{ habit.name }}
-              </span>
+            <!-- No checkbox and no spacer: the row sits further left by design
+                 (Analyst §2.5). The lapsed list has never been tickable. -->
+            <div class="habit-row lapsed">
+              <span class="dot" aria-hidden="true" [style.background-color]="colorHex(habit)"></span>
+              <span class="glyph" aria-hidden="true">{{ iconGlyph(habit) }}</span>
+              <span class="name">{{ habit.name }}</span>
               <span class="last-done">last done {{ getLastDoneDaysAgo(habit) }}</span>
-              <span class="completion-rate">{{ getCompletionPercentage(habit) }}</span>
+              <span class="rate">{{ getCompletionPercentage(habit) }}</span>
             </div>
           }
         </div>
       }
-    </div>
+    </section>
   }
 </div>

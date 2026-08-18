@@ -118,6 +118,43 @@ any value that has a token. (b) The shell imposes **no** `max-width` on
 the width is a per-page concern. The roadmap's "~1150px shell column" was a
 paraphrase and is superseded.
 
+**AD-010 — "Completion rate" means one thing: pooled due-days.**
+(2026-08-18, `dashboard-redesign` §3.1) `HabitService.poolCounts(habits, from,
+to)` returns `{done, countable}` over an inclusive window, pooled across habits;
+the Dashboard header, the LAST 7 DAYS card and the month-over-month delta all
+divide it. This **supersedes the mean-of-per-habit-rates** the header used
+before: mean-of-rates gave a habit created yesterday the same weight as one with
+six months of history, so adding a habit moved a number that describes the past.
+The window arithmetic is `completionRate`'s contract lifted verbatim, `isDueOn`
+guard included — `dayStatus` reports `'done'` before `'not-due'`, so without the
+guard an off-schedule completion inflates the numerator alone and the header
+prints >100%. Analytics (roadmap §4) consumes the same primitive. Falls out:
+habits exist but no due day has resolved → `—`, not `100%`.
+
+**AD-011 — "Longest active streak" is the longest *running* streak, and names
+nobody when there is none.** (2026-08-18, `dashboard-redesign` §3.2, R3)
+`topCurrentStreak` reduces `currentStreak`, not `longestStreak` — *active* is
+load-bearing in the label, which is why the card can name an owner and why the
+number drops the day a streak breaks. It returns `null` rather than a
+zero-streak winner, so the card cannot credit an arbitrary habit with a streak
+of nothing. The roadmap's "aggregate `longestStreak` + owner" is superseded.
+
+**AD-012 — Perfect-days and the overall rate read `activeHabits`, so archiving
+edits the past.** (2026-08-18, `dashboard-redesign` §3.3, R4) Archiving a habit
+removes it from every *past* day too, so days it used to spoil become perfect
+retroactively and the count can go **up**. Kept deliberately, consistent with
+what the header has always done (`habit-lifecycle` R10); the alternative makes
+archiving cosmetic and puts two different histories on one page. Named as a
+decision so nobody "fixes" it into an inconsistency — see L-008.
+
+**AD-013 — The stat card is a shared component from its first use.**
+(2026-08-18, `dashboard-redesign` §3.6) `<app-stat-card>` in
+`src/app/shared/stat-card/` owns the label / value / inline-unit / sub triad and
+shows **either** a sub-line **or** a progress bar, never both. Roadmap §4 reuses
+it for the Analytics cards; building it inline on the Dashboard meant restyling
+it twice. `:host` is the card — no wrapper element — so it behaves as a grid
+item wherever it is dropped.
+
 ## Blockers
 
 **B-001 — The Haiku-enforcement hook denied every non-`.md` edit in the repo.**
@@ -214,6 +251,34 @@ actually on the dev-server port before believing a screenshot — port 4200 was
 serving a different project, and the first "actual" capture was someone else's UI
 entirely.
 
+**L-012 — A value you did not sample is a value you invented.**
+(`dashboard-redesign`, design check) Every number in the Dashboard SCSS came out
+of the prototype source except one: `line-height: 1` on the emoji glyph, added
+by reflex because "icons need a tight line box". The prototype sets none, and
+the emoji font's normal line box (~25px at 15px) is precisely what makes a habit
+row 49px rather than 44px — so every row was 5px short and the error compounded
+down the page. The side-by-side composite did not show it; scanning the target
+PNG's pixel rows found it in one pass. Corollary to L-011: when a component is
+built from sampled values, the *absence* of a property is part of the sample.
+
+**L-013 — The executor stopping is the process working, not the process
+failing.** (`dashboard-redesign` Step 10) The Haiku run halted on a failing
+spec, reported the cause correctly (a root-provided service reads localStorage
+once, so reseeding between two `createComponent()` calls in one `it` changes
+nothing), and did **not** adjust the expectation to go green. The defect was in
+`tasks.md`, written by the planning model. That is the failure mode the "If
+blocked — do not improvise, never change a spec's expectation" clause exists to
+catch, and it caught one on its first real outing. Keep the clause in every
+step.
+
+**L-014 — A screenshot of an empty store verifies nothing.**
+(`dashboard-redesign` §3.7) The Dashboard's whole redesign is a summary layer,
+and against an empty store it renders "Add a habit first." — so the design check
+had nothing to compare until demo data existed. Seeding is part of the
+comparison tooling, not a nice-to-have: `--seed` on `design-shot.mjs`. It also
+surfaced a defect no unit test would have (see the Quick Task on `isLapsed`) —
+real-shaped data is a test in its own right.
+
 ## Quick Tasks
 
 *Small work done without a spec (3 files or fewer, one sentence describes it).*
@@ -226,6 +291,8 @@ entirely.
 | Consolidate the two `STATE.md` files | ✓ Done | See AD-008 |
 | Replace the literal NUL byte in `habit-list.component.ts`'s `UNCATEGORISED` sentinel with a `\0` escape | 📋 Open | git treats the file as binary and `grep` skips it (found during 4b) |
 | Split `HabitListComponent` | 📋 Open | Its SCSS is 7.82 kB against a 6 kB warn budget, and 4c will add more to the same file |
+| Demo-data seeding for design checks | ✓ Done | `scripts/demo-data.mjs` (six habits, 126 days, the prototype's own LCG) + `scripts/seed-demo.mjs` + `--seed` on `design-shot.mjs`. Tooling only — nothing under `src/` imports it. See L-014 |
+| **`isLapsed` makes "Overdue / slipping" useless once history exists** | 📋 Open | Found by the §1 design check, **not** introduced by it. `isLapsed` = "≥1 missed day ever", so after a few weeks *every* habit qualifies: the section listed all six demo habits, three of them labelled "last done today". The target shows one. The prototype's rule is "not done today **and** last done ≥2 days ago" (`!doneToday && lastAgo >= 2`). Deliberately left alone — bucket definitions were out of scope for `dashboard-redesign` (§4) and this changes behaviour, not appearance. Sized **Small** (one computed, `dashboard.component.ts`) if adopted |
 
 ---
 
@@ -241,7 +308,8 @@ entirely.
 | **4c** | Completion types (count / duration / numeric / checklist, storage v2) | 📋 Planned | — (see `phase-4-plan.md`) |
 | **5** | Notifications (time-based reminders, PWA) | 📋 Planned | — |
 | **R0** | Redesign §0 — global shell (top bar, tokens, 2 stub routes) | ✅ Done, unmerged | `archive/2026-07-26-global-shell/` |
-| **R1–R5** | Redesign §1–§5 (Dashboard, Habits, Calendar, Analytics, Stacks) | 📋 Planned | — (see `design-implementation-roadmap.md`) |
+| **R1** | Redesign §1 — Dashboard (4 stat cards, `<app-stat-card>`, row restyle) | ✅ Done, uncommitted | `archive/2026-08-18-dashboard-redesign/` |
+| **R2–R5** | Redesign §2–§5 (Habits, Calendar, Analytics, Stacks) | 📋 Planned | — (see `design-implementation-roadmap.md`) |
 | — | Angular 17 → 21 upgrade (four major hops) | ✅ Done | `archive/2026-07-17-upgrade-angular-21/` |
 
 ## Notes
@@ -251,9 +319,13 @@ entirely.
   `**` → Dashboard.
 - Service derivations: `dayStatus`, `completionRate`, `isLapsed`, `monthGrid`,
   `isDueOn`, `currentStreak`, `longestStreak` — all pure, all live (AD-004).
-- Test baseline after redesign §0 (`global-shell`): **115** passing
-  (`npx ng test --watch=false --browsers=ChromeHeadless`). Was 107 after 4b;
-  §0 added 3 `formatBarDate` specs, 3 routing specs and 2 shell specs.
+- Test baseline after redesign §1 (`dashboard-redesign`): **134** passing
+  (`npx ng test --watch=false --browsers=ChromeHeadless`). Was 115 after §0
+  (itself 107 after 4b); §1 added 11 service specs, 3 stat-card specs and 5
+  Dashboard specs.
+- New service derivations from §1, all pure and live (AD-004): `poolCounts`,
+  `perfectDays`, `topCurrentStreak`, `dueTodayCounts`, `earliestStartIso`, and
+  the `shiftIso` date helper.
 - Design comparison needs `DESIGN_BASE_URL` when port 4200 is taken by another
   project: `DESIGN_BASE_URL=http://localhost:4300 npm run design:shot -- <name>`
   against `npx ng serve --port 4300`. See L-011.

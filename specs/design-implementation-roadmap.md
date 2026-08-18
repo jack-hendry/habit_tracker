@@ -42,6 +42,15 @@ the product metaphor; don't substitute a generic icon.
 
 ## 1 — Dashboard
 
+> ✅ **Built** (2026-08-18) — spec in `specs/archive/2026-08-18-dashboard-redesign/`,
+> decisions AD-010…AD-013. Two claims below were **wrong** and were corrected
+> against the prototype source during the build, so read them with care:
+> **LONGEST ACTIVE STREAK** is the longest *current* streak (`currentStreak`),
+> not an aggregate of `longestStreak` (AD-011); and `OVERALL COMPLETION` was
+> **not** "already computed" — it averaged per-habit rates where every new card
+> pools due-days, so it was switched to pooled (AD-010). Both are the kind of
+> paraphrase §4 and §5 should expect to find in their own sections.
+
 **Current state.** `Dashboard` heading + "Overall Completion" %; three plain
 list sections: *To do today*, *Done today*, *Overdue / slipping*. Rows are
 checkbox/name/%. No stat cards, no progress bar, no streak/perfect-day summary.

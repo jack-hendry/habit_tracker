@@ -50,6 +50,17 @@
   --pending-bg: #fef3c7;
   --pending-text: #92400e;
   --row-neutral: #dcdcd9;
+
+  /* Dashboard §1 — sub-text, empty copy, section rule, progress track, and the
+     "improved" green. `--positive` is deliberately NOT `--done`: `--done` fills
+     a control and a border where it reads as status (AD-006), while this is
+     12px text on white and needs the darker value to stay legible
+     (dashboard-redesign CriticReview R6). */
+  --text-sub: #75797f;
+  --text-faint: #a3a7ad;
+  --rule: #efefec;
+  --track: #eef0f2;
+  --positive: #2f9e44;
 }
 
 /* `margin: 0` makes the sticky bar genuinely full-bleed; the background is on

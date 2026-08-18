@@ -3,12 +3,14 @@
 //   node scripts/design-shot.mjs dashboard
 //   node scripts/design-shot.mjs habits --width 390
 //   node scripts/design-shot.mjs dashboard --route /habits --viewport-only
+//   node scripts/design-shot.mjs dashboard --seed    # demo habits, not an empty store
 //
 // Reads design/target/<name>.png (optional) and writes:
 //   design/actual/<name>.png   — what the app currently renders
 //   design/compare/<name>.png  — target | actual, side by side (only if a target exists)
 
 import { chromium } from 'playwright';
+import { buildDemoHabits, STORAGE_KEY } from './demo-data.mjs';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -33,14 +35,15 @@ function parseArgs(argv) {
   const [name, ...rest] = argv;
   if (!name || name.startsWith('--')) {
     throw new Error(
-      'Usage: node scripts/design-shot.mjs <name> [--route /path] [--width 1440] [--height 900] [--viewport-only]',
+      'Usage: node scripts/design-shot.mjs <name> [--route /path] [--width 1440] [--height 900] [--viewport-only] [--seed]',
     );
   }
 
-  const args = { name, width: 1440, height: 900, fullPage: true, route: ROUTES[name] };
+  const args = { name, width: 1440, height: 900, fullPage: true, seed: false, route: ROUTES[name] };
   for (let i = 0; i < rest.length; i++) {
     const flag = rest[i];
     if (flag === '--viewport-only') args.fullPage = false;
+    else if (flag === '--seed') args.seed = true;
     else if (flag === '--route') args.route = rest[++i];
     else if (flag === '--width') args.width = Number(rest[++i]);
     else if (flag === '--height') args.height = Number(rest[++i]);
@@ -105,6 +108,19 @@ async function main() {
   const browser = await chromium.launch();
   try {
     const page = await browser.newPage({ viewport: { width: args.width, height: args.height } });
+
+    // Seeded before the first navigation, so the app's service reads it on
+    // construction. An empty store renders the empty state, which compares
+    // against nothing.
+    if (args.seed) {
+      const habits = JSON.stringify(buildDemoHabits(new Date()));
+      await page.addInitScript(
+        ([key, value]) => window.localStorage.setItem(key, value),
+        [STORAGE_KEY, habits],
+      );
+      console.log(`seeded:  ${JSON.parse(habits).length} demo habits, ~18 weeks of history`);
+    }
+
     await page.goto(`${BASE_URL}${args.route}`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(300); // let Angular animations settle
     await page.screenshot({ path: actualPath, fullPage: args.fullPage });

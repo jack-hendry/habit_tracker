@@ -40,7 +40,8 @@ This is a standalone Angular 21.2 application scaffolded via `ng new` (Angular C
 - `npm run watch` / `ng build --watch --configuration development` — incremental dev build.
 - `npm test` / `ng test` — run unit tests via Karma + Jasmine.
   - To run a single spec file, use Karma's `--include` or narrow via `fit`/`fdescribe` in the spec, since there is no built-in Angular CLI flag for a single-file run.
-- `npm run design:shot -- <name> [--width 1440] [--viewport-only]` — screenshot a route with Playwright and composite it beside its mockup. Requires the dev server to already be running.
+- `npm run design:shot -- <name> [--width 1440] [--viewport-only] [--seed]` — screenshot a route with Playwright and composite it beside its mockup. Requires the dev server to already be running. `--seed` injects the demo habits (`scripts/demo-data.mjs`) into localStorage before the page loads — without it an empty store renders the empty state and the comparison is worthless.
+- `node scripts/seed-demo.mjs` — print a one-liner to paste into DevTools that loads the same six demo habits (~18 weeks of history) into a real browser. `--json` prints the raw array. Tooling only; nothing under `src/` imports it.
 - There is no e2e test runner configured (`ng e2e` requires adding a package first).
 - There is no lint script configured in `package.json` / `angular.json`.
 - `pip install pre-commit && pre-commit install --hook-type pre-push` — one-time setup per clone to wire the `clean-table-check.sh` pre-push hook (`.pre-commit-config.yaml`). Without this the hook is not installed and pushes are not checked.

@@ -437,6 +437,148 @@ export class HabitService {
   }
 
   /**
+   * The `YYYY-MM-DD` `days` calendar days after `iso` (negative counts back).
+   * Timezone-safe: built from split parts, never parsed from the ISO string
+   * (AD-003). Public because the Dashboard derives its stat windows from it.
+   */
+  static shiftIso(iso: string, days: number): string {
+    const [y, m, d] = iso.split('-').map(Number);
+    return HabitService.todayIso(new Date(y, m - 1, d + days));
+  }
+
+  /**
+   * The earliest start date across `habits`, or null for an empty list. Used as
+   * the lower bound of "all history" windows so the caller never has to guess
+   * one (an unguarded loop bound is a hung tab, not a test failure —
+   * dashboard-redesign CriticReview R11).
+   */
+  earliestStartIso(habits: Habit[]): string | null {
+    if (habits.length === 0) {
+      return null;
+    }
+    return habits
+      .map((h) => HabitService.startIso(h))
+      .reduce((min, iso) => (iso < min ? iso : min));
+  }
+
+  /**
+   * Pooled completion counts over the inclusive window `[fromIso, toIso]`,
+   * across all of `habits`. One definition of "completion rate" for the whole
+   * Dashboard (Analyst §3.1): the caller divides `done / countable` and decides
+   * what `countable === 0` should render as.
+   *
+   * Same contract as `completionRate`, pooled: numerator = due days that are
+   * `done`; denominator = due days that are `done` or `missed`. A `pending`
+   * today is in neither — the day is not over.
+   *
+   * The `isDueOn` guard must stay ahead of the `dayStatus` call: `dayStatus`
+   * reports `'done'` before `'not-due'`, so an off-schedule completion would
+   * otherwise inflate the numerator alone (CriticReview R1).
+   */
+  poolCounts(
+    habits: Habit[],
+    fromIso: string,
+    toIso: string,
+    today: Date = new Date(),
+  ): { done: number; countable: number } {
+    let done = 0;
+    let countable = 0;
+    if (habits.length === 0 || !ISO_DATE.test(fromIso) || !ISO_DATE.test(toIso)) {
+      return { done, countable };
+    }
+
+    let cursor = fromIso;
+    while (cursor <= toIso) {
+      for (const habit of habits) {
+        if (this.isDueOn(habit, cursor)) {
+          const status = this.dayStatus(habit, cursor, today);
+          if (status === 'done') {
+            done++;
+            countable++;
+          } else if (status === 'missed') {
+            countable++;
+          }
+        }
+      }
+      cursor = HabitService.nextIso(cursor);
+    }
+
+    return { done, countable };
+  }
+
+  /**
+   * Days on which **at least one** habit was due and **every** habit that was
+   * due was completed, from the earliest start date through today inclusive.
+   *
+   * The `anyDue` guard is what stops a day where nothing was scheduled from
+   * counting as a triumph. Today counts only if everything due today is already
+   * done — there is no grace, because a day that counts before it is finished
+   * would tick back down at midnight (Analyst §3.3).
+   */
+  perfectDays(habits: Habit[], today: Date = new Date()): number {
+    const fromIso = this.earliestStartIso(habits);
+    if (fromIso === null) {
+      return 0;
+    }
+    const toIso = HabitService.todayIso(today);
+
+    let count = 0;
+    let cursor = fromIso;
+    while (cursor <= toIso) {
+      let anyDue = false;
+      let allDone = true;
+      for (const habit of habits) {
+        if (this.isDueOn(habit, cursor)) {
+          anyDue = true;
+          if (!habit.completedDates.includes(cursor)) {
+            allDone = false;
+          }
+        }
+      }
+      if (anyDue && allDone) {
+        count++;
+      }
+      cursor = HabitService.nextIso(cursor);
+    }
+    return count;
+  }
+
+  /**
+   * The habit with the longest **currently running** streak, with that streak.
+   * Returns null when no habit has one — the card must then show `0 days` with
+   * no owner rather than crediting whichever habit happens to sort first
+   * (dashboard-redesign CriticReview R3). Ties keep the earlier habit.
+   */
+  topCurrentStreak(
+    habits: Habit[],
+    today: Date = new Date(),
+  ): { habit: Habit; streak: number } | null {
+    let best: { habit: Habit; streak: number } | null = null;
+    for (const habit of habits) {
+      const streak = this.currentStreak(habit, today);
+      if (streak > 0 && (best === null || streak > best.streak)) {
+        best = { habit, streak };
+      }
+    }
+    return best;
+  }
+
+  /**
+   * How many habits are **due** today and how many of those are done. Both
+   * numbers come from the due-today set on purpose: `doneToday` on the
+   * Dashboard also lists habits ticked off-schedule (habit-lifecycle R9), and
+   * counting those would print "6 of 5 done" (Analyst §3.5).
+   */
+  dueTodayCounts(habits: Habit[], today: Date = new Date()): { due: number; done: number } {
+    const todayIso = HabitService.todayIso(today);
+    const dueHabits = habits.filter((h) => this.isDueOn(h, todayIso));
+    return {
+      due: dueHabits.length,
+      done: dueHabits.filter((h) => h.completedDates.includes(todayIso)).length,
+    };
+  }
+
+  /**
    * True iff there is ≥1 missed day in [startDate .. yesterday]. A pending
    * today does NOT make a habit lapsed (CriticReview R4). Short-circuits on the
    * first missed day.
