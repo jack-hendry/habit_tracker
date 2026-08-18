@@ -155,6 +155,37 @@ it for the Analytics cards; building it inline on the Dashboard meant restyling
 it twice. `:host` is the card — no wrapper element — so it behaves as a grid
 item wherever it is dropped.
 
+**AD-014 — A day-strip records what happened; a rate averages obligations.**
+(`habits-redesign` §3.1) `recentStatuses` calls `dayStatus` **raw**, with no
+`isDueOn` guard — deliberately the opposite of `poolCounts` (AD-010), which must
+guard or an off-schedule tick prints `112%`. `dayStatus` reports `done` before
+`not-due`, so a day completed off-schedule or during a pause paints in the
+habit's colour. That is correct for a strip and wrong for a rate. The two look
+inconsistent and must not be unified; both are pinned by specs.
+
+**AD-015 — The 30-day strip's three cell colours, and `pending` among them.**
+(`habits-redesign` §3.1) done → the habit's hex; `missed` **and** `pending` →
+`--strip-missed` (`#e9e9e7`); `not-due` **and** `future` → `--strip-not-due`
+(`#f5f5f3`). There is **no red** in the strip — the roadmap claimed there was.
+`pending` was settled by measuring the target, not by taste: an unticked daily
+habit's final cell reads `rgb(233,233,231)` there. It also makes the strip feel
+live, filling with colour the moment the checkbox is ticked.
+
+**AD-016 — Create is a modal; edit stays inline; both render one
+`<app-habit-form>`.** (`habits-redesign` §3.5) The prototype's `+ New habit`
+button is **dead** — no handler, no modal markup — so every part of this is
+ours, and none of it is verifiable by a design check. Native `<dialog>` +
+`showModal()` for the free focus trap, `Esc` and `::backdrop`. The element is
+**always rendered and its contents gated by `@if (creating())`**, which makes
+"empty form on re-open" structural rather than a `reset()` someone must
+remember. The modal and the inline editor are mutually exclusive.
+
+**AD-017 — `HabitService.add` returns `Habit | null`.**
+(`habits-redesign` CriticReview R11) Creation is two calls — `add(name,
+schedule)` then `update(id, patch)` for the metadata — so a `void` return meant
+the create modal could collect eight fields and silently persist two. Widening
+is purely additive; every prior caller ignores the return.
+
 ## Blockers
 
 **B-001 — The Haiku-enforcement hook denied every non-`.md` edit in the repo.**
@@ -279,6 +310,48 @@ comparison tooling, not a nice-to-have: `--seed` on `design-shot.mjs`. It also
 surfaced a defect no unit test would have (see the Quick Task on `isLapsed`) —
 real-shaped data is a test in its own right.
 
+**L-015 — A prototype's interactive surface is invisible in its screenshots.**
+(`habits-redesign` §6, roadmap §2b) The Habits mockup's habit *name* is a link
+to a whole sixth page — a per-habit detail view with its own hero, streak
+display and all-history grid. In the PNG it is bold black text, so the roadmap's
+original §2 critic pass looked straight at it and recorded nothing. The link
+exists only as an `onClick` in the markup, exactly as the nav's active/inactive
+colours existed only as a ternary in the trailing `<script type="text/x-dc">`.
+That is twice now. **Enumerate the `onClick`/handler attributes in the source
+and account for every distinct target; do not enumerate clickable-*looking*
+things in the image.** A missed page is the largest possible roadmap error —
+larger than any wrong colour, because it is a whole spec that never gets
+written.
+
+**L-016 — Re-run a delegated step's own "Done when"; do not trust the report.**
+(`habits-redesign` Step 6 → 7b) The executor declared Step 6 complete while the
+step's own grep — no raw hex in the extracted SCSS — was still failing on 29
+literals, and its report said the step passed. Two steps later the file would
+have been buried under a full restyle. The check cost one `grep` at the top
+level. Corollary to L-013: L-013 says a stopping executor is the process
+working; this says a *reporting* executor is not evidence of anything. Verify
+the commands, not the prose. The same run under-reported its test count (152 vs
+an actual 154) and later over-predicted it (165 vs 163) — reports drift in both
+directions.
+
+**L-017 — Predict the assertions, not the `it` count.**
+(`habits-redesign` Step 8) `tasks.md` asked for "one spec" pinning `add`'s new
+return value; the executor instead strengthened the three *existing* `add` specs
+with the same assertions — better coverage, unchanged `it` count — and the run
+ended at 163 against a predicted 165 with nothing actually missing. Absolute
+totals make a silently skipped suite visible (`TEMPLATE.md`) and that is worth
+keeping, but they manufacture a phantom failure whenever new coverage lands
+inside an existing spec. State the total as a **floor** (`≥N`), and name the
+assertions that must exist rather than the number of blocks holding them.
+
+**L-018 — A stop clause is not a substitute for opening the file.**
+(`habits-redesign` CriticReview R11) `tasks.md` had already written
+`const created = this.habitService.add(...)` plus an "If blocked — STOP if `add`
+does not return a habit" clause. `add` returned `void`. The clause would have
+worked: the run halts, correctly, twelve steps in. One `grep` of the signature
+during the critic pass removed the halt entirely. Write the stop clause *and*
+check the assumption it guards — the clause is the net, not the plan.
+
 ## Quick Tasks
 
 *Small work done without a spec (3 files or fewer, one sentence describes it).*
@@ -292,6 +365,10 @@ real-shaped data is a test in its own right.
 | Replace the literal NUL byte in `habit-list.component.ts`'s `UNCATEGORISED` sentinel with a `\0` escape | 📋 Open | git treats the file as binary and `grep` skips it (found during 4b) |
 | Split `HabitListComponent` | 📋 Open | Its SCSS is 7.82 kB against a 6 kB warn budget, and 4c will add more to the same file |
 | Demo-data seeding for design checks | ✓ Done | `scripts/demo-data.mjs` (six habits, 126 days, the prototype's own LCG) + `scripts/seed-demo.mjs` + `--seed` on `design-shot.mjs`. Tooling only — nothing under `src/` imports it. See L-014 |
+| Split `HabitListComponent` (SCSS over budget) | ✓ Done | Closed by `habits-redesign` — extracting `<app-habit-form>` and `<app-day-strip>` took the file from 7.82 kB (1.82 kB over the 6 kB warn, 2.18 kB from the 10 kB **error**) to no warning at all. It was not a tidy-up: the row restyle could not land until it did |
+| Tokenise the 29 pre-AD-009 hex literals in the edit form | ✓ Done | `habits-redesign` Step 7b. `#ccc`/`#555`/`#222`/`#f0f0f0` predated the redesign palette entirely; extracting the form into `shared/habit-form/` is what made them visible. See L-016 |
+| Back-fill component coverage for pause / resume / archive / reactivate / delete-confirm | 📋 Open | `habits-redesign` CriticReview R1: the page had **zero** component specs before this slice. It now has 12 (`getScheduleLabel`, create modal, row rendering) but these five transitions are still untested at the component level. Sized **Small** |
+| Add a habit-detail route (roadmap §2b) | 📋 Open | **Not Small** — sized Large, needs its own spec. Listed here only so it is not lost: the habit name on `/habits` is deliberately static text today, and becomes a `routerLink` when §2b lands. See L-015 |
 | **`isLapsed` makes "Overdue / slipping" useless once history exists** | 📋 Open | Found by the §1 design check, **not** introduced by it. `isLapsed` = "≥1 missed day ever", so after a few weeks *every* habit qualifies: the section listed all six demo habits, three of them labelled "last done today". The target shows one. The prototype's rule is "not done today **and** last done ≥2 days ago" (`!doneToday && lastAgo >= 2`). Deliberately left alone — bucket definitions were out of scope for `dashboard-redesign` (§4) and this changes behaviour, not appearance. Sized **Small** (one computed, `dashboard.component.ts`) if adopted |
 
 ---
@@ -309,7 +386,9 @@ real-shaped data is a test in its own right.
 | **5** | Notifications (time-based reminders, PWA) | 📋 Planned | — |
 | **R0** | Redesign §0 — global shell (top bar, tokens, 2 stub routes) | ✅ Done, unmerged | `archive/2026-07-26-global-shell/` |
 | **R1** | Redesign §1 — Dashboard (4 stat cards, `<app-stat-card>`, row restyle) | ✅ Done, uncommitted | `archive/2026-08-18-dashboard-redesign/` |
-| **R2–R5** | Redesign §2–§5 (Habits, Calendar, Analytics, Stacks) | 📋 Planned | — (see `design-implementation-roadmap.md`) |
+| **R2** | Redesign §2 — Habits (row restyle, `<app-day-strip>`, `<app-habit-form>`, create modal) | ✅ Done, uncommitted | `habits-redesign/` |
+| **R2b** | Redesign §2b — Habit detail page (**new**, missed by the original roadmap pass) | 📋 Planned | — (roadmap §2b; Large) |
+| **R3–R5** | Redesign §3–§5 (Calendar, Analytics, Stacks) | 📋 Planned | — (see `design-implementation-roadmap.md`) |
 | — | Angular 17 → 21 upgrade (four major hops) | ✅ Done | `archive/2026-07-17-upgrade-angular-21/` |
 
 ## Notes
@@ -326,6 +405,14 @@ real-shaped data is a test in its own right.
 - New service derivations from §1, all pure and live (AD-004): `poolCounts`,
   `perfectDays`, `topCurrentStreak`, `dueTodayCounts`, `earliestStartIso`, and
   the `shiftIso` date helper.
+- Test baseline after redesign §2 (`habits-redesign`): **163** passing (was 134).
+  §2 added `recentStatuses` (the one new derivation — pure, AD-004/AD-014), the
+  page's **first** component specs, and specs for two new shared components.
+- Shared components now: `<app-stat-card>` (§1), `<app-day-strip>` (§2, takes
+  `statuses` + `hex`), `<app-habit-form>` (§2, `[habit]` null = create). §2b
+  re-uses `day-strip` at a longer window; §4 still needs the heatmap primitive.
+- **The prototype has six pages, not five.** The sixth (habit detail) is reached
+  by clicking a habit's *name* on `/habits`. Roadmap §2b. See L-015.
 - Design comparison needs `DESIGN_BASE_URL` when port 4200 is taken by another
   project: `DESIGN_BASE_URL=http://localhost:4300 npm run design:shot -- <name>`
   against `npx ng serve --port 4300`. See L-011.

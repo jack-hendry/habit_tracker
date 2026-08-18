@@ -1,0 +1,164 @@
+<div class="edit-form">
+  <label class="edit-field">
+    <span class="edit-label">Name</span>
+    <input
+      type="text"
+      [ngModel]="draftName()"
+      (ngModelChange)="draftName.set($event)"
+      class="habit-input"
+    />
+  </label>
+
+  <label class="edit-field">
+    <span class="edit-label">Description</span>
+    <input
+      type="text"
+      [ngModel]="draftDescription()"
+      (ngModelChange)="draftDescription.set($event)"
+      placeholder="What is this habit for?"
+      class="habit-input"
+    />
+  </label>
+
+  <label class="edit-field">
+    <span class="edit-label">Category</span>
+    <input
+      type="text"
+      [ngModel]="draftCategory()"
+      (ngModelChange)="draftCategory.set($event)"
+      [attr.list]="'category-suggestions-' + habit()?.id"
+      placeholder="e.g. Health"
+      class="habit-input"
+    />
+  </label>
+
+  <!-- Category suggestions datalist -->
+  <datalist [attr.id]="'category-suggestions-' + habit()?.id">
+    @for (cat of categories(); track cat) {
+      <option [value]="cat"></option>
+    }
+  </datalist>
+
+  <div class="edit-field">
+    <span class="edit-label">Colour</span>
+    <div class="swatch-picker">
+      @for (c of colors; track c.id) {
+        <button
+          type="button"
+          class="swatch"
+          [class.selected]="draftColor() === c.id"
+          [style.background-color]="c.hex"
+          [attr.aria-label]="c.label"
+          [attr.aria-pressed]="draftColor() === c.id"
+          [title]="c.label"
+          (click)="draftColor.set(c.id)"
+        ></button>
+      }
+    </div>
+  </div>
+
+  <div class="edit-field">
+    <span class="edit-label">Icon</span>
+    <div class="icon-picker">
+      @for (i of icons; track i.id) {
+        <button
+          type="button"
+          class="icon-option"
+          [class.selected]="draftIcon() === i.id"
+          [attr.aria-label]="i.label"
+          [attr.aria-pressed]="draftIcon() === i.id"
+          [title]="i.label"
+          (click)="draftIcon.set(i.id)"
+        >
+          {{ i.glyph }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <label class="edit-field">
+    <span class="edit-label">Notes</span>
+    <textarea
+      [ngModel]="draftNotes()"
+      (ngModelChange)="draftNotes.set($event)"
+      rows="3"
+      placeholder="Anything worth remembering about this habit"
+      class="habit-input notes-input"
+    ></textarea>
+  </label>
+
+  <label class="edit-field">
+    <span class="edit-label">Start Date</span>
+    <input
+      type="date"
+      [ngModel]="draftStartDate()"
+      (ngModelChange)="draftStartDate.set($event)"
+      class="habit-input"
+    />
+  </label>
+
+  @if (backdateWarning()) {
+    <p class="backdate-warning" role="status">
+      ⚠️ {{ backdateWarning() }} days before today will count as missed.
+    </p>
+  } @else if (isFutureStartDate()) {
+    <p class="future-warning" role="status">
+      📅 This habit won't be due until {{ draftStartDate() }}.
+    </p>
+  }
+
+  <div class="edit-field">
+    <span class="edit-label">Schedule</span>
+    <div class="schedule-picker">
+      <label class="radio-group">
+        <input
+          type="radio"
+          [checked]="draftScheduleType() === 'daily'"
+          (change)="draftScheduleType.set('daily')"
+          class="radio-input"
+        />
+        <span>Daily</span>
+      </label>
+      <label class="radio-group">
+        <input
+          type="radio"
+          [checked]="draftScheduleType() === 'weekdays'"
+          (change)="draftScheduleType.set('weekdays')"
+          class="radio-input"
+        />
+        <span>Specific days</span>
+      </label>
+    </div>
+
+    @if (draftScheduleType() === 'weekdays') {
+      <div class="weekday-picker">
+        @for (wd of weekdays; track wd.value) {
+          <label class="weekday-checkbox">
+            <input
+              type="checkbox"
+              [checked]="isDraftDaySelected(wd.value)"
+              (change)="toggleDraftDay(wd.value)"
+              class="checkbox-input"
+            />
+            <span>{{ wd.label }}</span>
+          </label>
+        }
+      </div>
+    }
+  </div>
+
+  @if (scheduleChanged()) {
+    <p class="schedule-warning" role="status">
+      ⚠️ Changing the schedule recalculates history: past days that are no
+      longer scheduled stop counting as missed, so streaks and completion
+      rates may change.
+    </p>
+  }
+
+  <div class="edit-actions">
+    <button (click)="onSave()" [disabled]="!canSave()" class="save-button">
+      Save
+    </button>
+    <button (click)="cancel.emit()" class="cancel-button">Cancel</button>
+  </div>
+</div>

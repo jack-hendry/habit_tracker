@@ -66,10 +66,10 @@ export class HabitService {
   }
 
   /** Add a habit. Empty/whitespace names and empty `weekdays` schedules are rejected. */
-  add(name: string, schedule: Schedule = { type: 'daily' }): void {
+  add(name: string, schedule: Schedule = { type: 'daily' }): Habit | null {
     const trimmed = name.trim();
     if (!trimmed || !isSchedule(schedule)) {
-      return;
+      return null;
     }
     const now = new Date();
     const habit: Habit = {
@@ -82,6 +82,7 @@ export class HabitService {
     };
     this._habits.update((list) => [...list, habit]);
     this.persist();
+    return habit;
   }
 
   /**
@@ -609,6 +610,26 @@ export class HabitService {
     }
     // Lexical max works for zero-padded YYYY-MM-DD strings
     return habit.completedDates.reduce((max, date) => (date > max ? date : max));
+  }
+
+  /**
+   * Day statuses for the `days`-day window ending today (inclusive), oldest
+   * first. Drives the 30-day strip on the Habits page (§2) and the heatmap in
+   * §4.
+   *
+   * Deliberately calls `dayStatus` with **no `isDueOn` guard**, unlike
+   * `poolCounts` (habits-redesign CriticReview R4). `dayStatus` reports 'done'
+   * before 'not-due', so a day completed off-schedule or during a pause paints
+   * as done — which is right for a record of what happened, and wrong for a
+   * rate. The two must not be unified.
+   */
+  recentStatuses(habit: Habit, days: number, today: Date = new Date()): DayStatus[] {
+    const todayIso = HabitService.todayIso(today);
+    const result: DayStatus[] = [];
+    for (let offset = days - 1; offset >= 0; offset--) {
+      result.push(this.dayStatus(habit, HabitService.shiftIso(todayIso, -offset), today));
+    }
+    return result;
   }
 
   /**

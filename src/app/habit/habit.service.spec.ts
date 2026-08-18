@@ -6,10 +6,12 @@ describe('HabitService', () => {
     localStorage.clear();
   });
 
-  it('should add a habit and persist', () => {
+  it('should add a habit and persist, returning the created habit', () => {
     const service = new HabitService();
-    service.add('Read 20 min');
+    const created = service.add('Read 20 min');
 
+    expect(created).not.toBeNull();
+    expect(created?.name).toBe('Read 20 min');
     expect(service.habits().length).toBe(1);
     expect(service.habits()[0].name).toBe('Read 20 min');
 
@@ -17,6 +19,20 @@ describe('HabitService', () => {
     const reloaded = new HabitService();
     expect(reloaded.habits().length).toBe(1);
     expect(reloaded.habits()[0].id).toBe(stored.id);
+  });
+
+  it('should return null for empty name', () => {
+    const service = new HabitService();
+    const created = service.add('');
+    expect(created).toBeNull();
+    expect(service.habits().length).toBe(0);
+  });
+
+  it('should return null for whitespace-only name', () => {
+    const service = new HabitService();
+    const created = service.add('   ');
+    expect(created).toBeNull();
+    expect(service.habits().length).toBe(0);
   });
 
   it('should reject empty and whitespace-only names', () => {
@@ -520,6 +536,55 @@ describe('HabitService — Phase 3 (dayStatus, completionRate, isLapsed, monthGr
       const grid = service.monthGrid(h, 2026, 6, FRI_17);
       const cell18 = grid.find((c) => 'iso' in c && c.iso === '2026-07-18');
       expect('status' in cell18! && cell18!.status).toBe('future');
+    });
+  });
+
+  describe('recentStatuses', () => {
+    const service = new HabitService();
+
+    it('returns exactly `days` entries', () => {
+      const h = makeHabit();
+      const result = service.recentStatuses(h, 30, FRI_17);
+      expect(result.length).toBe(30);
+    });
+
+    it('the last entry is today\'s status', () => {
+      const h = makeHabit({ completedDates: ['2026-07-17'] });
+      const result = service.recentStatuses(h, 7, FRI_17);
+      expect(result[result.length - 1]).toBe('done');
+    });
+
+    it('entries are oldest-first (a habit done only yesterday puts done at index days - 2)', () => {
+      const h = makeHabit({ completedDates: ['2026-07-16'] }); // Done yesterday (Thu)
+      const result = service.recentStatuses(h, 7, FRI_17); // 7 days ending today (Fri)
+      // oldest to newest: index 0 is 6 days ago, ..., index 5 is yesterday, index 6 is today
+      expect(result[result.length - 2]).toBe('done'); // Yesterday (Thu 16)
+      expect(result[result.length - 1]).toBe('pending'); // Today (Fri 17) not done
+    });
+
+    it('a habit whose startDate falls inside the window reports not-due for days before it', () => {
+      // FRI_17 = Jul 17 (Fri). 7-day window = Jul 11-17
+      // Jul 11=Sat, 12=Sun, 13=Mon, 14=Tue, 15=Wed, 16=Thu, 17=Fri
+      // indices:  0     1      2      3      4      5       6
+      const h = makeHabit({ createdAt: '2026-07-15T12:00:00Z', startDate: '2026-07-15' }); // Wed
+      const result = service.recentStatuses(h, 7, FRI_17);
+      // Days before startDate (15) should be not-due:
+      expect(result[0]).toBe('not-due'); // Jul 11 (Sat, before start)
+      expect(result[1]).toBe('not-due'); // Jul 12 (Sun, before start)
+      expect(result[2]).toBe('not-due'); // Jul 13 (Mon, before start)
+      expect(result[3]).toBe('not-due'); // Jul 14 (Tue, before start)
+      // Start date itself should be missed (past, not completed):
+      expect(result[4]).toBe('missed'); // Jul 15 (Wed, start, past, not done)
+    });
+
+    it('a day in completedDates that the schedule did not cover reports done', () => {
+      // MWF schedule but completed on Tuesday (off-schedule)
+      // FRI_17 = Jul 17. 7-day window = Jul 11-17
+      // Jul 14 = Tue (off-schedule, but in completedDates), index 3
+      const h = makeHabit({ schedule: MWF, completedDates: ['2026-07-14'] }); // Tue, off-schedule
+      const result = service.recentStatuses(h, 7, FRI_17);
+      // Jul 14 is index 3 in a 7-day window ending Jul 17
+      expect(result[3]).toBe('done'); // Off-schedule completion should still show as done
     });
   });
 });

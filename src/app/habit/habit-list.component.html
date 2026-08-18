@@ -1,57 +1,7 @@
 <div class="habit-list-container">
-  <h1>My Habits</h1>
-
-  <div class="add-habit">
-    <div class="form-section">
-      <input
-        type="text"
-        [ngModel]="newName()"
-        (ngModelChange)="newName.set($event)"
-        (keyup.enter)="add()"
-        placeholder="Add a new habit..."
-        class="habit-input"
-      />
-
-      <!-- Schedule picker (Phase 2) -->
-      <div class="schedule-picker">
-        <label class="radio-group">
-          <input
-            type="radio"
-            [checked]="scheduleType() === 'daily'"
-            (change)="scheduleType.set('daily')"
-            class="radio-input"
-          />
-          <span>Daily</span>
-        </label>
-        <label class="radio-group">
-          <input
-            type="radio"
-            [checked]="scheduleType() === 'weekdays'"
-            (change)="scheduleType.set('weekdays')"
-            class="radio-input"
-          />
-          <span>Specific days</span>
-        </label>
-      </div>
-
-      @if (scheduleType() === 'weekdays') {
-        <div class="weekday-picker">
-          @for (wd of weekdays; track wd.value) {
-            <label class="weekday-checkbox">
-              <input
-                type="checkbox"
-                [checked]="isDaySelected(wd.value)"
-                (change)="toggleDay(wd.value)"
-                class="checkbox-input"
-              />
-              <span>{{ wd.label }}</span>
-            </label>
-          }
-        </div>
-      }
-    </div>
-
-    <button (click)="add()" class="add-button">Add</button>
+  <div class="page-header">
+    <h1>My Habits</h1>
+    <button type="button" class="new-habit-button" (click)="openCreate()">+ New habit</button>
   </div>
 
   <!-- Category filter (Phase 4a) and Archived toggle (Phase 4b). View state only, not persisted. -->
@@ -88,19 +38,17 @@
     }
 
     <!-- Show archived toggle (Phase 4b) -->
-    <div class="archived-toggle">
-      <button
-        class="toggle-button"
-        [class.active]="showArchived()"
-        (click)="showArchived.set(!showArchived())"
-      >
-        @if (showArchived()) {
-          Hide archived
-        } @else {
-          Show archived
-        }
-      </button>
-    </div>
+    <button
+      class="toggle-button"
+      [class.active]="showArchived()"
+      (click)="showArchived.set(!showArchived())"
+    >
+      @if (showArchived()) {
+        Hide archived
+      } @else {
+        Show archived
+      }
+    </button>
   </div>
 
   <!-- Shared suggestion list for the category input -->
@@ -129,163 +77,12 @@
         >
           @if (editingId() === habit.id && !isArchived(habit.id)) {
             <!-- Inline edit form (Phase 4a, Phase 4b: not available in archived view) -->
-            <div class="edit-form">
-              <label class="edit-field">
-                <span class="edit-label">Name</span>
-                <input
-                  type="text"
-                  [ngModel]="draftName()"
-                  (ngModelChange)="draftName.set($event)"
-                  class="habit-input"
-                />
-              </label>
-
-              <label class="edit-field">
-                <span class="edit-label">Description</span>
-                <input
-                  type="text"
-                  [ngModel]="draftDescription()"
-                  (ngModelChange)="draftDescription.set($event)"
-                  placeholder="What is this habit for?"
-                  class="habit-input"
-                />
-              </label>
-
-              <label class="edit-field">
-                <span class="edit-label">Category</span>
-                <input
-                  type="text"
-                  [ngModel]="draftCategory()"
-                  (ngModelChange)="draftCategory.set($event)"
-                  list="category-suggestions"
-                  placeholder="e.g. Health"
-                  class="habit-input"
-                />
-              </label>
-
-              <div class="edit-field">
-                <span class="edit-label">Colour</span>
-                <div class="swatch-picker">
-                  @for (c of colors; track c.id) {
-                    <button
-                      type="button"
-                      class="swatch"
-                      [class.selected]="draftColor() === c.id"
-                      [style.background-color]="c.hex"
-                      [attr.aria-label]="c.label"
-                      [attr.aria-pressed]="draftColor() === c.id"
-                      [title]="c.label"
-                      (click)="draftColor.set(c.id)"
-                    ></button>
-                  }
-                </div>
-              </div>
-
-              <div class="edit-field">
-                <span class="edit-label">Icon</span>
-                <div class="icon-picker">
-                  @for (i of icons; track i.id) {
-                    <button
-                      type="button"
-                      class="icon-option"
-                      [class.selected]="draftIcon() === i.id"
-                      [attr.aria-label]="i.label"
-                      [attr.aria-pressed]="draftIcon() === i.id"
-                      [title]="i.label"
-                      (click)="draftIcon.set(i.id)"
-                    >
-                      {{ i.glyph }}
-                    </button>
-                  }
-                </div>
-              </div>
-
-              <label class="edit-field">
-                <span class="edit-label">Notes</span>
-                <textarea
-                  [ngModel]="draftNotes()"
-                  (ngModelChange)="draftNotes.set($event)"
-                  rows="3"
-                  placeholder="Anything worth remembering about this habit"
-                  class="habit-input notes-input"
-                ></textarea>
-              </label>
-
-              <label class="edit-field">
-                <span class="edit-label">Start Date</span>
-                <input
-                  type="date"
-                  [ngModel]="draftStartDate()"
-                  (ngModelChange)="draftStartDate.set($event)"
-                  class="habit-input"
-                />
-              </label>
-
-              @if (backdateWarning()) {
-                <p class="backdate-warning" role="status">
-                  ⚠️ {{ backdateWarning() }} days before today will count as missed.
-                </p>
-              } @else if (isFutureStartDate()) {
-                <p class="future-warning" role="status">
-                  📅 This habit won't be due until {{ draftStartDate() }}.
-                </p>
-              }
-
-              <div class="edit-field">
-                <span class="edit-label">Schedule</span>
-                <div class="schedule-picker">
-                  <label class="radio-group">
-                    <input
-                      type="radio"
-                      [checked]="draftScheduleType() === 'daily'"
-                      (change)="draftScheduleType.set('daily')"
-                      class="radio-input"
-                    />
-                    <span>Daily</span>
-                  </label>
-                  <label class="radio-group">
-                    <input
-                      type="radio"
-                      [checked]="draftScheduleType() === 'weekdays'"
-                      (change)="draftScheduleType.set('weekdays')"
-                      class="radio-input"
-                    />
-                    <span>Specific days</span>
-                  </label>
-                </div>
-
-                @if (draftScheduleType() === 'weekdays') {
-                  <div class="weekday-picker">
-                    @for (wd of weekdays; track wd.value) {
-                      <label class="weekday-checkbox">
-                        <input
-                          type="checkbox"
-                          [checked]="isDraftDaySelected(wd.value)"
-                          (change)="toggleDraftDay(wd.value)"
-                          class="checkbox-input"
-                        />
-                        <span>{{ wd.label }}</span>
-                      </label>
-                    }
-                  </div>
-                }
-              </div>
-
-              @if (scheduleChanged()) {
-                <p class="schedule-warning" role="status">
-                  ⚠️ Changing the schedule recalculates history: past days that are no
-                  longer scheduled stop counting as missed, so streaks and completion
-                  rates may change.
-                </p>
-              }
-
-              <div class="edit-actions">
-                <button (click)="saveEdit()" [disabled]="!canSave()" class="save-button">
-                  Save
-                </button>
-                <button (click)="cancelEdit()" class="cancel-button">Cancel</button>
-              </div>
-            </div>
+            <app-habit-form
+              [habit]="editingHabit()"
+              [categories]="categories()"
+              (save)="saveEdit($event)"
+              (cancel)="cancelEdit()"
+            />
           } @else {
             @if (isArchived(habit.id)) {
               <!-- Archived view: simplified display with only Reactivate action -->
@@ -300,12 +97,11 @@
                 }
 
                 <div class="habit-meta">
+                  <span class="schedule-label">{{ getScheduleLabel(habit.id) }}</span>
                   @if (habit.category) {
                     <span class="category-chip">{{ habit.category }}</span>
                   }
-                  <span class="schedule-label">{{ getScheduleLabel(habit.id) }}</span>
                   <span class="streak-info">{{ getCurrentStreak(habit.id) }} 🔥</span>
-                  <span class="best-streak">best: {{ getLongestStreak(habit.id) }}</span>
                 </div>
               </div>
               <div class="habit-actions">
@@ -313,18 +109,20 @@
               </div>
             } @else {
               <!-- Active view: full display with Edit, Pause/Resume, Archive, Delete -->
+              <label class="habit-checkbox" [class.checked]="isDoneToday(habit.id)">
+                <input
+                  type="checkbox"
+                  [checked]="isDoneToday(habit.id)"
+                  (change)="toggleToday(habit.id)"
+                  [attr.aria-label]="habit.name"
+                />
+                <span aria-hidden="true">{{ isDoneToday(habit.id) ? '✓' : '' }}</span>
+              </label>
+
               <div class="habit-main">
                 <div class="habit-header">
-                  <label class="habit-checkbox">
-                    <input
-                      type="checkbox"
-                      [checked]="isDoneToday(habit.id)"
-                      (change)="toggleToday(habit.id)"
-                    />
-                    <span class="habit-icon" aria-hidden="true">{{ iconGlyph(habit) }}</span>
-                    <span class="habit-name">{{ habit.name }}</span>
-                  </label>
-
+                  <span class="habit-icon" aria-hidden="true">{{ iconGlyph(habit) }}</span>
+                  <span class="habit-name">{{ habit.name }}</span>
                   @if (isPaused(habit.id)) {
                     <span class="paused-badge">Paused</span>
                   }
@@ -333,28 +131,30 @@
                 @if (habit.description) {
                   <p class="habit-description">{{ habit.description }}</p>
                 }
-
                 @if (isPaused(habit.id)) {
                   <p class="paused-since">{{ getPausedSinceLabel(habit) }}</p>
                 }
 
                 <div class="habit-meta">
+                  <span class="schedule-label">{{ getScheduleLabel(habit.id) }}</span>
                   @if (habit.category) {
                     <span class="category-chip">{{ habit.category }}</span>
                   }
-                  <span class="schedule-label">{{ getScheduleLabel(habit.id) }}</span>
                   <span class="streak-info">{{ getCurrentStreak(habit.id) }} 🔥</span>
-                  <span class="best-streak">best: {{ getLongestStreak(habit.id) }}</span>
-                  @if (!isDueToday(habit.id)) {
-                    <span class="not-scheduled">not today</span>
-                  }
+                  <span class="best-streak">best {{ getLongestStreak(habit.id) }}</span>
                   @if (getCompletionPercentageForHabit(habit)) {
                     <span class="completion-rate">{{ getCompletionPercentageForHabit(habit) }}</span>
                   } @else if (getStartsLabel(habit)) {
                     <span class="starts-label">{{ getStartsLabel(habit) }}</span>
                   }
+                  @if (!isDueToday(habit.id)) {
+                    <span class="not-scheduled">not today</span>
+                  }
                 </div>
               </div>
+
+              <app-day-strip [statuses]="strip30(habit)" [hex]="colorHex(habit)" />
+
               <div class="habit-actions">
                 @if (!isPaused(habit.id)) {
                   <button (click)="pause(habit.id)" class="pause-button">Pause</button>
@@ -380,4 +180,16 @@
       }
     </div>
   }
+
+  <dialog #createDialog class="create-dialog" (close)="closeCreate()">
+    @if (creating()) {
+      <h2 class="dialog-title">New habit</h2>
+      <app-habit-form
+        [habit]="null"
+        [categories]="categories()"
+        (save)="createHabit($event)"
+        (cancel)="closeCreate()"
+      />
+    }
+  </dialog>
 </div>

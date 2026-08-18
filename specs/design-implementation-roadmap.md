@@ -87,6 +87,16 @@ checkbox/name/%. No stat cards, no progress bar, no streak/perfect-day summary.
 
 ## 2 — Habits
 
+> ✅ **Built** (2026-08-18) — spec in `specs/habits-redesign/`. Three claims
+> below were **wrong** and were corrected against the prototype source during
+> the build: the 30-day sparkline has **no red** in it (both non-done states are
+> near-greys, `#e9e9e7` and `#f5f5f3` — the critic's "Ship-side-project shows
+> red gaps" was a paraphrase); the schedule chip is blue in **every** case, not
+> only for the `Mon · Wed · Fri` variant; and the `+ New habit` button in the
+> prototype is **dead** — no `onClick`, no modal markup anywhere in the file —
+> so the create flow was designed from scratch, not transcribed. The build also
+> found a whole page the roadmap had missed: see §2b.
+
 **Current state.** `My Habits` + always-visible inline add form (text input +
 schedule radios). Category filter chips + Show-archived toggle exist. Rows show
 checkbox/icon/name, a meta line (category chip, schedule label, streak, best,
@@ -124,6 +134,54 @@ checkbox/icon/name, a meta line (category chip, schedule label, streak, best,
   existing archived behavior** — don't assume the mockup redefines it.
 - Edit is still needed (button present); the existing inline edit form can stay as
   the Edit target even if Add becomes a modal.
+
+---
+
+## 2b — Habit detail (NEW PAGE — missed by the original pass)
+
+> ⚠️ **Added 2026-08-18**, during the §2 build. This section did not exist in
+> the first pass and is the roadmap's largest omission so far.
+
+**Current state.** Does not exist. No route, no component.
+
+**How it was missed.** On the Habits page the habit **name is a link** —
+`onClick="{{ h.open }}"` with a `style-hover="color:#0066cc;text-decoration:
+underline"` — opening a `page: 'goal'` view. In a screenshot that name is bold
+black text, indistinguishable from a label, so §2's critic pass looked straight
+at it and saw nothing. The link exists only in the markup. This is the same
+class of miss as the nav's active/inactive colours living in the trailing
+`<script type="text/x-dc">` rather than the markup (skill `design-to-roadmap`),
+and it is the second time the lesson has cost something: **a prototype's
+interactive surface is not visible in its screenshots — enumerate `onClick`
+attributes in the source, not clickable-looking things in the PNG.**
+
+**UI changes (all new).** From the source (`isGoal`, lines 247–300):
+- A colour-tinted hero band in the habit's own colour, `max-width:900px` inside
+  it — a **third** page column width, after Dashboard's 960 and Habits' 1000.
+- `← All habits` back link (12.5px, `--accent`, 600).
+- A **56px/800** current-streak number at `letter-spacing:-2px` with a
+  `day streak 🔥` label in `#e8590c`, a 1px vertical rule, then a 52px rounded
+  icon tile (12px radius, white, `rgba(0,0,0,0.1)` border) beside the name.
+- An **all-history** cell grid (`cellsAll`) — the same three-colour mapping as
+  §2's 30-day strip, over every day since the start rather than 30.
+- Its own month navigation (`goalM`).
+
+**New features (all new).**
+- Route `/habits/:id` + a detail component, and the habit name on §2 becomes a
+  `routerLink` (§2 deliberately renders it as **static text**, not a dead link).
+- Reuses `<app-day-strip>` from §2 for the all-history grid — it already takes
+  `statuses` + `hex`, so only the window changes.
+
+**Sizing.** **Large** — a new route, a new page, and the first per-entity URL in
+the app (every route today is a static path). Needs its own `Analyst.md` +
+`tasks.md` + 2 harden rounds.
+
+**Critic Review.** The hero's tint is derived from the habit's hex at low alpha
+via the source's `hexA(hex, a)` helper, **not** a fixed tint — so it must come
+from `colorOf`, like the leaderboard bars in §4. The 900px column confirms there
+is no shell-level content width (global-shell AD-009) and that each page must
+state its own; three pages now have three different values, which is worth
+checking against §4 and §5 before either is built.
 
 ---
 
@@ -247,7 +305,17 @@ caught vs screenshot:
 3. **Dashboard** (1) — stat cards + `<stat-card>` component (reused by Analytics).
 4. **Habits** (2) — row restyle + 30-day sparkline + create modal.
 5. **Analytics** (4) — full spec; reuses `<stat-card>` and chart primitives.
-6. **Stacks** (5) — full spec; new model + CDK drag-and-drop. Build last.
+6. **Habit detail** (2b) — full spec; first per-entity route. Reuses
+   `<app-day-strip>` from §2, so it is cheap *after* §2 and expensive before it.
+7. **Stacks** (5) — full spec; new model + CDK drag-and-drop. Build last.
 
 Shared primitives to extract early: `<stat-card>`, a bar/sparkline component, and
 the heatmap — used across Dashboard, Habits, and Analytics.
+
+Two of the three now exist: `<app-stat-card>` (§1) and `<app-day-strip>` (§2,
+`statuses` + `hex`, which §2b re-uses at a longer window). The heatmap is still
+outstanding and belongs to §4.
+
+**Page column widths are per-page, not shell-level** (global-shell AD-009) and
+they genuinely differ: Dashboard 960px, Habits 1000px, Habit detail 900px. Read
+the width out of the source for §4 and §5 rather than inheriting a neighbour's.
