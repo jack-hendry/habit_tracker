@@ -259,3 +259,82 @@ value is and says nothing about whether it reaches the pixel. When a spec writes
 a one-property override next to an element-scoped base rule, scope the override
 the same way (`.habit-actions .delete-button`), or it is decoration on a rule
 that never fires. The sibling of L-021 and L-023: a check that could not fail.
+
+**L-026 — A design screenshot only checks the states its seed happens to render.**
+(`calendar-redesign` AC 10) `design:shot calendar --seed` opens the first demo
+habit — daily, with a perfect current month — so the grid contained `done`,
+`pending`, `future` and `blank` and nothing else. `missed` and `not-due` never
+rendered. Two of five status colours could have been any value at all and the
+composite would have looked correct, because a state that does not render
+cannot look wrong. The check reported success on four things and was silent
+about two, and silence is indistinguishable from a pass in a picture.
+
+This is **not** the caveat `CLAUDE.md` already carried. That one is about
+hover, focus and error states, which hide behind an *event*. These render in
+the same static view with no interaction at all — same page, same shot,
+different data. Conflating the two is why nobody had looked for it.
+
+The tell was available and ignored: the whole reason the R1 defect (AD-020) had
+to be settled by three rounds of `getComputedStyle` is that a 520px composite
+column cannot distinguish `#dcfce7` from `#f4fbf6`. If measurement is needed to
+verify a colour, the screenshot was never verifying it.
+
+Two mechanisms came out of this. `scripts/design-shot.mjs` now declares each
+route's data-dependent states in `STATES` and prints what actually rendered
+(`5 of 7 declared … NOT RENDERED: status-missed, status-not-due`) — it does not
+fail the run, because an uncovered state is a silence rather than a defect, and
+naming the silence is the entire job. And AD-022's `*.design.spec.ts` covers
+what no screenshot structurally can. The coverage line found a second instance
+on its first run: `design:shot habits --seed` covers **1 of 4** declared states,
+because every demo habit is due on the current weekday — so the `NOT TODAY`
+pill was never compared against the mockup during the §2 build, on a page
+already shipped and archived. Note its limit: only class-encoded states are
+visible, and `<app-day-strip>` / `<app-activity-grid>` set colour via
+`[style.background]` (AD-015), so their three states carry no class and need
+the AD-022 treatment instead.
+
+**L-027 — A second pass must re-open the source, not re-read the spec.**
+(`calendar-redesign` CriticReview R1–R4) The Analyst was written from a careful
+reading of the prototype `.dc.html`. Reviewed a day later *against the source
+again*, four of its assertions were false — the `done`/`missed` fills were not
+already tokenised, blank cells are `transparent` not `#fafaf9`, `#fafaf9` is a
+sixth cell state and not padding, and `--radius-card-lg` already existed.
+
+Every one of them was **invisible from the Analyst's own prose and obvious from
+the `.dc.html` plus a `grep` of `src/styles.scss`.** That is the whole finding.
+A spec is a paraphrase of the design, and by the second pass the paraphrase is
+what gets reviewed — the drift is never in the reasoning, it is in the
+transcription layer, and re-reading the reasoning cannot see it. The harden
+round's first move is `read_file` on the source and a `grep` for every token it
+claims exists, before a single line of its argument is considered. Two of the
+four were claims about *the repository*, not the design (`--radius-card-lg`
+exists; `--done-bg` is #f4fbf6), which are even cheaper to check and were
+checked by nobody. Cost if unfixed: every done cell near-white, with the grep,
+the build and the suite green. Sibling of L-011 and L-012.
+
+**L-028 — A guard keyed to one tool's input shape is not a guard on the action.**
+(2026-08-19, found while running `calendar-redesign`)
+`enforce-haiku-tasks-pretooluse.sh` blocks top-level code edits during a
+tasks.md run. It matched `Edit|Write|MultiEdit` and read
+`.tool_input.file_path`. A Bash-mediated edit has no `file_path`, so the hook
+exited 0 and `python3 - <<'PY'` rewriting `src/styles.scss` went straight
+through with a run marker active. The guard was written against *the tools that
+were convenient to inspect*, not against *the action being guarded*.
+
+Two things make this worse than a simple oversight. The sibling hook
+`protect-spec-docs-from-subagents.sh` already listed `Bash` in its matcher — the
+capability gap was known in the same directory. And a session configured to
+prefer shell over the file tools takes the unguarded path **by default**, so the
+bypass was the common case rather than a corner case; the guard was weakest
+exactly where it was most needed.
+
+When writing a hook, enumerate every tool that can perform the action and check
+the guard against the action. Where the tool's input cannot be parsed to find
+its target — a shell command string cannot — the honest fallback is a
+conservative heuristic plus a test matrix, not a silent exit 0.
+`enforce-haiku-tasks.test.sh` pins 22 cases, because heuristics rot in both
+directions: a tightened pattern that starts blocking `npx ng test` makes every
+run unusable, a loosened one re-opens the gap with no symptom. It earned its
+keep during development by catching a false positive nobody would have
+predicted — `<<<` contains a `<<` pair, so every herestring read was being
+denied until the pattern grew a leading `[^<]` guard.

@@ -177,6 +177,55 @@ after archiving, resolve instead of bouncing. Only `/habits` filters by status.
 The route sits between `habits` and `**`: `path: 'habits'` is a full-path match
 and cannot swallow `/habits/x`, but the wildcard can.
 
+**AD-020 — Cell fills are page-scoped tokens; a status name is not a colour.**
+(2026-08-19, `calendar-redesign` CriticReview R1) `--cal-done-bg` (#dcfce7)
+and `--cal-missed-bg` (#fee2e2) exist *because* `--done-bg` (#f4fbf6) and
+`--missed-bg` (#fdf4f4) already exist and are different colours. Same status,
+same product, two values, because they do different jobs: the Dashboard's are
+pale washes behind a text row on white, the calendar's are saturated fills for
+a 52px block that must read as colour at a glance. The Analyst assumed one
+status meant one value and asserted the calendar's fills were already
+tokenised; building that would have washed every done cell to near-white while
+AC 3's raw-hex grep, the build and the suite all stayed green — a token *was*
+being used, just the wrong one. `not-due` had no token at all: its #f3f4f6 /
+#d1d5db lived only as literals inside `calendar.component.scss`. Naming a token
+after its **status** invites the collision; these are named after their
+**page**. Before reusing a status token on a new surface, compare the hexes —
+the name will not warn you (L-012's rule, one level up).
+
+**AD-021 — The prototype's dataset shape is not adopted, only its style.**
+(2026-08-19, `calendar-redesign` §3.6 + CriticReview R3) Two non-adoptions on
+one page, one rule. (a) The source's `statusOf` has a **sixth** state, `off`
+(#fafaf9 fill, #c2c6cc numeral), for real days before its dataset begins —
+in its March, `off:-20` puts days 1–20 there. `HabitService.dayStatus` folds
+"before creation" into `not-due` and keeps five `DayStatus` values; a sixth
+would mean a service change, a seventh legend item and new spec surface, for a
+state that exists only because the prototype has 126 days of history. (b)
+`Prev`/`Next` grey out at `calM === 0 / 4` in the source; `monthGrid` takes an
+arbitrary year/month with no bound, so copying that condition would cap the
+app's calendar at whatever range happened to match the fake data. Both are the
+same failure: **a prototype's data-shape artifacts are indistinguishable from
+product decisions in a screenshot.** Sample the colours, never the dataset's
+limits. The colour pair for the disabled arrows was still sampled faithfully;
+only the *condition* that switches between them was dropped.
+
+**AD-022 — A design-conformance spec asserts computed style against the
+design source.** (2026-08-19, follow-on to `calendar-redesign`)
+`*.design.spec.ts` — `src/app/calendar/calendar.design.spec.ts` is the first —
+reads `getComputedStyle` on probe elements and compares against values
+transcribed from the `.dc.html`. Three properties are load-bearing and all
+three are easy to lose: (a) expected values come from the **design source, not
+the component's SCSS** — copying the SCSS yields a change-detector that agrees
+with whatever the component happens to say and catches nothing; (b) the
+assertion reads **computed style, not stylesheet text**, because only a real
+cascade catches a rule that is correct and never fires (L-025); (c) it uses
+**probe elements carrying the component's `_ngcontent-*` attribute rather than
+seeded data**, so it is date-independent — a habit crafted to produce all five
+statuses has no past days on the 1st and no future days on the 31st. Proven by
+mutation, not by being green: pointing `--cal-done-bg` at #f4fbf6 fails it, and
+so does collapsing a day-number colour to grey. This is the mechanism that
+covers what a screenshot structurally cannot (L-026).
+
 ## Blockers
 
 **B-001 — The Haiku-enforcement hook denied every non-`.md` edit in the repo.** → moved to `STATE-ARCHIVE.md`
@@ -217,6 +266,9 @@ disagree.
 - **L-023** — A `DO NOT TOUCH` enforced by `git diff` cannot see a revert.
 - **L-024** — A named assertion can still be hollow.
 - **L-025** — A rule with the right token can still lose to the rule above it.
+- **L-026** — A design screenshot only checks the states its seed happens to render.
+- **L-027** — A second pass must re-open the source, not re-read the spec.
+- **L-028** — A guard keyed to one tool's input shape is not a guard on the action.
 
 ## Quick Tasks
 
@@ -255,7 +307,8 @@ disagree.
 | **R1** | Redesign §1 — Dashboard (4 stat cards, `<app-stat-card>`, row restyle) | ✅ Done, uncommitted | `archive/2026-08-18-dashboard-redesign/` |
 | **R2** | Redesign §2 — Habits (row restyle, `<app-day-strip>`, `<app-habit-form>`, create modal) | ✅ Done, unmerged | `archive/2026-08-19-habits-redesign/` |
 | **R2b** | Redesign §2b — Habit detail page (**new**, missed by the original roadmap pass) | ✅ Done, uncommitted — 163 → **218** tests | `archive/2026-08-18-habit-detail/` (Large, split into 2 runs) |
-| **R3–R5** | Redesign §3–§5 (Calendar, Analytics, Stacks) | 📋 Planned | — (see `design-implementation-roadmap.md`) |
+| **R3** | Redesign §3 — Calendar (one card, per-status day numbers, Today ring) | ✅ Done, unmerged — 236 → **251** tests | `archive/2026-08-19-calendar-redesign/` |
+| **R4–R5** | Redesign §4–§5 (Analytics, Stacks) | 📋 Planned | — (see `design-implementation-roadmap.md`) |
 | — | Angular 17 → 21 upgrade (four major hops) | ✅ Done | `archive/2026-07-17-upgrade-angular-21/` |
 
 ## Notes
