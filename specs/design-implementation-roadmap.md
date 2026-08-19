@@ -87,7 +87,8 @@ checkbox/name/%. No stat cards, no progress bar, no streak/perfect-day summary.
 
 ## 2 — Habits
 
-> ✅ **Built** (2026-08-18) — spec in `specs/habits-redesign/`. Three claims
+> ✅ **Built** (2026-08-18, design-checked and archived 2026-08-19) — spec in
+> `specs/archive/2026-08-19-habits-redesign/`. Three claims
 > below were **wrong** and were corrected against the prototype source during
 > the build: the 30-day sparkline has **no red** in it (both non-done states are
 > near-greys, `#e9e9e7` and `#f5f5f3` — the critic's "Ship-side-project shows
@@ -197,6 +198,19 @@ checking against §4 and §5 before either is built.
 ---
 
 ## 3 — Calendar
+
+> ✅ **Built** (2026-08-19) — spec in `specs/calendar-redesign/`. The section
+> below undersold the work: it is **not** "mostly a restyle". Reading the
+> prototype source turned up a structural change (nav + grid + legend collapse
+> into **one** card), a per-status **day-number colour** the app painted flat
+> grey, and the selector + selected-habit strip being **one** flex row. Three
+> further claims here are wrong or incomplete: `future` does not merely need
+> "confirming" — it was genuinely wrong (`#e0e7ff`/`#6366f1` vs the source's
+> `#e7eaff`/`#8f95e8`); the prototype has a **sixth** cell state (`off`, for
+> days before the dataset begins) that this app deliberately does not adopt;
+> and "everything else already exists" skipped the fact that
+> `calendar.component.spec.ts` did not exist at all. See
+> `specs/calendar-redesign/CriticReview.md` R1–R13.
 
 **Current state.** Habit `<select>` + selected-habit dot/name/category, month
 nav (Prev / `July 2026` / Next), a Sun–Sat status grid, and a legend

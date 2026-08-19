@@ -88,6 +88,24 @@
   --card-divider: #f0f0ee;
   --hero-rule: rgba(0, 0, 0, 0.12);
   --hero-tile-border: rgba(0, 0, 0, 0.1);
+
+  /* Calendar §3 — the day-grid palette. Deliberately NOT the dashboard's
+     --done-bg / --missed-bg (#f4fbf6 / #fdf4f4): those are pale row tints
+     behind a list row, these are saturated fills for a 52px cell
+     (CriticReview R1). There is no --cal-off-*: the prototype's sixth 'off'
+     state (pre-history days) has no DayStatus in this app and is deliberately
+     not adopted (R3). --cal-label is a fourth near-grey, distinct from
+     --text / --nav-inactive / --text-sub — do not collapse them (L-012). */
+  --cal-label: #3a3f45;
+  --cal-done-bg: #dcfce7;
+  --cal-missed-bg: #fee2e2;
+  --cal-missed-text: #991b1b;
+  --cal-not-due: #d1d5db;
+  --cal-not-due-bg: #f3f4f6;
+  --cal-not-due-text: #9aa1ab;
+  --cal-future: #8f95e8;
+  --cal-future-bg: #e7eaff;
+  --cal-future-text: #4338ca;
 }
 
 /* `margin: 0` makes the sticky bar genuinely full-bleed; the background is on

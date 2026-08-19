@@ -20,6 +20,11 @@ export class CalendarComponent {
 
   private readonly today = new Date();
 
+  /** Today as YYYY-MM-DD, for the Today ring (Analyst §3.5). Derived from the
+   *  same `today` that feeds `monthGrid`, so the ring and the statuses cannot
+   *  disagree. */
+  readonly todayIso = HabitService.todayIso(this.today);
+
   readonly selectedHabit = computed(() => {
     const habits = this.habits();
     const selectedId = this.selectedId();
@@ -86,10 +91,22 @@ export class CalendarComponent {
     }
   }
 
+  /**
+   * Cell classes: the status class, plus `today` for the one cell whose date
+   * is today. `today` is orthogonal to status — a done, missed or pending
+   * cell can be today; a future or blank one cannot (CriticReview R10).
+   */
   getCellClass(cell: { iso?: string; status?: string } | { blank: true }): string {
     if ('blank' in cell) {
       return 'blank';
     }
-    return `status-${cell.status}`;
+    const status = `status-${cell.status}`;
+    return cell.iso === this.todayIso ? `${status} today` : status;
+  }
+
+  /** Day-of-month without the leading zero — the prototype renders `1`, not
+   *  `01` (CriticReview R6). */
+  dayNumber(iso: string): number {
+    return Number(iso.slice(8, 10));
   }
 }

@@ -6,6 +6,19 @@ Design source: `Habit Tracker Prototype.dc.html` in the Claude Design project
 lines 141–178 (markup) and 476–494 (`MONTHS`, `statusOf`, `CS`, `gridFor`).
 Mockup: `design/target/calendar.png` (1440 CSS px, `deviceScaleFactor: 2`).
 
+> 🔴 **Corrected 2026-08-19 by `CriticReview.md` (harden round 1).** Read that
+> file's "Corrected token list" and "Corrected cell table" instead of §2.5 and
+> §2.8, which are wrong in four places: the `done` and `missed` cell fills are
+> **not** already tokenised (`--done-bg`/`--missed-bg` are the Dashboard's pale
+> row tints, not `#dcfce7`/`#fee2e2`) and `not-due` has no token at all (R1);
+> blank padding cells are **`transparent`**, not `#fafaf9` (R2); `#fafaf9` is
+> `CS.off`, a **sixth cell state** for pre-history days that this app has no
+> equivalent of and deliberately does not adopt (R3); and `--radius-card-lg`
+> already exists (R4). Four further gaps the section missed: the selector and
+> the selected-habit strip are **one** flex row (R5), day numbers are
+> **unpadded** (R6), the weekday headers are a **separate grid** (R7), and
+> `calendar.component.spec.ts` **does not exist** yet (R9).
+
 Size: **Medium** — a restyle of an existing page plus one small template
 addition (the Today ring). No new route, no new persisted entity, no data
 model change, **no new service method** — `monthGrid` and `dayStatus` already
@@ -309,9 +322,11 @@ their **visual style** (padding, border, radius, font, colour) is sampled.
 
 Each is checkable by a command or by one look at `design/compare/calendar.png`.
 
-1. `npx ng test --watch=false --browsers=ChromeHeadless` → **≥163 passing**
-   (the baseline going into this spec — confirm the exact figure before Step 1;
-   this section adds no new derivation, so any growth is component-spec-only).
+1. `npx ng test --watch=false --browsers=ChromeHeadless` → **≥236 passing**
+   (measured 2026-08-19; the Analyst's original "≥163" predated
+   `habits-redesign` and `habit-detail` — CriticReview R8). This section adds
+   no new derivation, so all growth is component-spec-only: the new
+   `calendar.component.spec.ts` (R9).
 2. `npx ng build` succeeds, `calendar.component.scss` prints no new budget
    warning.
 3. `grep -nE '#[0-9a-fA-F]{3,6}|rgba?\(' src/app/calendar/calendar.component.scss`
@@ -322,8 +337,9 @@ Each is checkable by a command or by one look at `design/compare/calendar.png`.
    `background:var(--surface); border:1px solid var(--border);
    border-radius:var(--radius-card-lg); padding:18px 20px`.
 6. Each day cell is 52px min-height, 4px radius, a 3px left border, with its
-   background/border/day-number colour keyed by status per §2.5's table —
-   including the **corrected** `future` colours.
+   background/border/day-number colour keyed by status per **CriticReview's
+   corrected cell table** (not §2.5's) — including the corrected `future`
+   colours, and `transparent` for blank padding cells (R2).
 7. Today's cell (and only today's) shows a `0 0 0 2px var(--accent)`
    box-shadow ring, independent of its status colouring. Covered by a spec
    comparing a cell whose `iso` is today against one that is not.
@@ -343,8 +359,50 @@ Each is checkable by a command or by one look at `design/compare/calendar.png`.
 
 ## 6. Retrospective
 
-*Filled in before archiving.*
-
 **Did `Analyst.md` catch anything not thought about up front?**
 
+Yes — the four things §1 lists (one card not three, per-status day-number
+colour, `future` being wrong rather than approximate, the Today ring) were all
+real, and none of them are in the roadmap's own summary of this section. The
+roadmap called §3 "the lightest section… mostly a restyle"; that was true of
+the *effort* but wrong about the *shape*, and reading the source rather than
+the screenshot is what found the difference.
+
+But the Analyst was itself written from a partly-remembered reading of the
+source, and the harden round caught **four wrong claims in its own token
+work** — see `CriticReview.md` R1–R4. The worst was R1: §2.8 asserted the
+`done`/`missed` cell fills were already tokenised, when `--done-bg` is
+`#f4fbf6` (the Dashboard's pale row tint) against the calendar's `#dcfce7`.
+Building that would have washed every done cell out to near-white — a defect
+that reads as "the greens look a bit flat" and survives a screenshot
+comparison indefinitely. The lesson is not "the Analyst was sloppy" but that
+**a spec's second pass must re-open the source, not re-read the spec**: every
+one of R1–R4 was invisible from the Analyst's own prose and obvious from the
+`.dc.html` plus a `grep` of `src/styles.scss`.
+
 **Did anything in `tasks.md` turn out to be wrong during coding?**
+
+Two things, both caught by the executor rather than by review:
+
+1. **Step 3's test count was wrong.** "Done when" said 242 (236 + 6) while the
+   step's own code block has five `it` blocks. The Haiku executor ran it, got
+   241, and stopped to report the mismatch instead of inventing a sixth test to
+   satisfy the number. That is the "Done when" contract working exactly as
+   `TEMPLATE.md` intends — a step whose success criterion is a literal figure
+   fails loudly when the figure is wrong, and the failure is cheap.
+2. **Step 1's comment was paraphrased.** The executor rewrote the token
+   comment, dropping the `--done-bg`/`--missed-bg` names that make it
+   actionable and adding an unsupported claim ("those are 30% greys"). The
+   values were all correct. Worth knowing that a literal code block in a step
+   protects the *code* but not the *prose around it*.
+
+**What verification actually cost.** The design composite could not settle the
+one question the section most needed settled: at a 520px column width
+`#dcfce7` and `#f4fbf6` are indistinguishable, which is precisely R1's failure
+mode. It took three browser measurement passes to close: the first mis-built
+its selectors (keys without a leading dot matched nothing), and the second
+found only three of five statuses because the default habit is daily with a
+perfect current month — `missed` and `not-due` do not exist on that grid. The
+Mon/Wed/Fri demo habit ("Morning run") surfaces both. **A design check that
+only ever loads the default view leaves two of five status colours untested**,
+and no amount of re-reading the composite would have revealed that.
