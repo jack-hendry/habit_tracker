@@ -10,19 +10,31 @@
 #
 #   ./.claude/hooks/enforce-haiku-tasks.test.sh
 #
-# Adds a run marker to STATE.md, exercises the matrix, removes it again.
+# Creates a throwaway spec triad and a run marker, exercises the matrix, then
+# removes both. The triad is CREATED rather than borrowed from a real spec: the
+# hook stays dormant unless the marker names a directory holding all three of
+# Analyst.md/tasks.md/CriticReview.md, so pointing this at a live spec means the
+# whole matrix silently inverts to ALLOW the day that spec is archived. Not
+# hypothetical -- it happened to calendar-redesign, and all 8 DENY cases
+# reported ALLOW until this was fixed.
 set -uo pipefail
 cd "$(dirname "$0")/../.."
 
 HOOK=./.claude/hooks/enforce-haiku-tasks-pretooluse.sh
-SPEC=calendar-redesign   # any dir with the full Analyst/tasks/CriticReview triad
+SPEC=__hook-test-spec   # throwaway; created below, removed on exit
 fails=0
+
+mkdir -p "specs/$SPEC"
+for f in Analyst.md tasks.md CriticReview.md; do
+  echo "Fixture for enforce-haiku-tasks.test.sh. Safe to delete." > "specs/$SPEC/$f"
+done
 
 if ! grep -q '^## Executing: ' STATE.md; then
   printf '\n## Executing: %s\n' "$SPEC" >> STATE.md
   added=1
 fi
 cleanup() {
+  rm -rf "specs/$SPEC"
   if [[ "${added:-0}" == 1 ]]; then
     python3 - "$SPEC" <<'PY'
 import sys
@@ -32,6 +44,15 @@ PY
   fi
 }
 trap cleanup EXIT
+
+# Guard against the inverted-matrix failure described above: a dormant hook
+# turns every DENY case into a passing ALLOW, so the run looks plausible while
+# asserting nothing. Prove it is armed before trusting a single result.
+armed=$(jq -n --arg c "$PWD" '{tool_name:"Edit",cwd:$c,tool_input:{file_path:"/x/src/app/a.ts"}}' | "$HOOK")
+if [[ -z "$armed" ]]; then
+  echo "ABORT: hook is dormant (marker or spec triad not picked up) - the matrix would be meaningless"
+  exit 1
+fi
 
 run() { # label expected tool tool_input_json
   local out got

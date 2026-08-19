@@ -199,7 +199,8 @@ checking against §4 and §5 before either is built.
 
 ## 3 — Calendar
 
-> ✅ **Built** (2026-08-19) — spec in `specs/calendar-redesign/`. The section
+> ✅ **Built** (2026-08-19) — spec in
+> `specs/archive/2026-08-19-calendar-redesign/`, decisions AD-020…AD-022. The section
 > below undersold the work: it is **not** "mostly a restyle". Reading the
 > prototype source turned up a structural change (nav + grid + legend collapse
 > into **one** card), a per-status **day-number colour** the app painted flat
@@ -210,7 +211,7 @@ checking against §4 and §5 before either is built.
 > days before the dataset begins) that this app deliberately does not adopt;
 > and "everything else already exists" skipped the fact that
 > `calendar.component.spec.ts` did not exist at all. See
-> `specs/calendar-redesign/CriticReview.md` R1–R13.
+> the archived summary's §3 (the R1–R13 findings the harden round produced).
 
 **Current state.** Habit `<select>` + selected-habit dot/name/category, month
 nav (Prev / `July 2026` / Next), a Sun–Sat status grid, and a legend
