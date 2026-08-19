@@ -57,7 +57,33 @@ Implementing a UI against a mockup uses Playwright, not the Chrome MCP tools (ch
 - `design/actual/` and `design/compare/` are gitignored; `design/target/` is committed.
 - `/design-check <name>` runs the whole loop (server check → shoot → compare → fix → re-shoot).
 
-Only what a static screenshot shows gets checked — hover, focus, empty, and error states need their own mockups.
+Only what a static screenshot shows gets checked. **Two different blind spots
+here, routinely confused:**
+
+- **Interaction states** — hover, focus, empty, error. These hide behind an
+  event, and need their own mockups.
+- **Data-dependent states** — states that render in the *same static view* and
+  appear only if the seed data happens to produce them. Nothing needs to be
+  clicked. `design:shot` prints a coverage line for these, driven by the
+  `STATES` map in `scripts/design-shot.mjs`:
+
+  ```
+  states:  5 of 7 declared — status-done(18) status-pending(1) …
+           NOT RENDERED: status-missed, status-not-due
+  ```
+
+  A state listed as `NOT RENDERED` is verified by **nothing** in that shot —
+  the composite looks equally correct whether its colours are right or wrong.
+  This is how two of the calendar's five status colours reached a "passed"
+  design check untested (calendar-redesign CriticReview R1–R3).
+
+For values a shot cannot reach, assert computed styles in a `*.design.spec.ts`
+(`src/app/calendar/calendar.design.spec.ts` is the worked example). Its expected
+values must be transcribed from the **prototype source**, never from the
+component's SCSS: copying the SCSS makes it a change-detector that agrees with
+whatever the component happens to say. Reading `getComputedStyle` rather than
+the stylesheet text is what catches a rule that is correct but loses on
+specificity (L-025).
 
 ## Architecture notes
 

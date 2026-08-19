@@ -32,6 +32,47 @@ const ROUTES = {
 // for spacing/colour judgements without producing a needlessly large image.
 const COLUMN_WIDTH = 520;
 
+// Data-dependent states each route can render, as CSS class names.
+//
+// A screenshot only exercises the states its seed data happens to produce, and
+// says NOTHING about the rest -- but it looks equally correct either way, so
+// the gap is invisible. Concretely: `design:shot calendar --seed` opens the
+// first demo habit (daily) on the current month, which has no missed and no
+// off-schedule days, so `status-missed` and `status-not-due` never render.
+// Two of five status colours were verified by nothing at all, and the
+// composite could not have told you (calendar-redesign CriticReview R1-R3).
+//
+// This is NOT the caveat CLAUDE.md already carries about hover/focus/empty
+// states. Those hide behind interaction. These are in the same static view --
+// same page, same shot, different data.
+//
+// Listing a state here does not assert it must appear; it declares that this
+// route can render it, so the run can say out loud which ones it did not
+// cover. Deliberately excludes `empty-state`, which is the opposite of a
+// seeded run and would warn on every single shot -- a warning that always
+// fires is one nobody reads.
+//
+// Limitation: only class-encoded states are visible here. `<app-day-strip>`
+// and `<app-activity-grid>` set their cell colour with `[style.background]`
+// via `stripCellColor()` (AD-015), so their three states carry no class and
+// this cannot see them. Cover those the way roadmap §3 ended up covering the
+// calendar's -- with a design-conformance spec asserting computed styles
+// (`src/app/calendar/calendar.design.spec.ts`).
+const STATES = {
+  calendar: [
+    'status-done',
+    'status-missed',
+    'status-pending',
+    'status-not-due',
+    'status-future',
+    'blank',
+    'today',
+  ],
+  habits: ['checked', 'not-due-today', 'archived', 'paused-badge'],
+  dashboard: ['done', 'last-done'],
+  'habit-detail': ['cell-blank'],
+};
+
 function parseArgs(argv) {
   const [name, ...rest] = argv;
   if (!name || name.startsWith('--')) {
@@ -94,6 +135,37 @@ async function composite(browser, targetPath, actualPath, outPath) {
   await page.close();
 }
 
+/**
+ * Print which of a route's declared states this shot actually rendered.
+ *
+ * The point is not to fail the run -- an uncovered state is not a defect, it is
+ * a silence. Naming the silence is the whole job: "4 of 7" tells you the
+ * comparison you are about to read verifies four things and is mute about
+ * three, which a clean-looking composite otherwise implies the opposite of.
+ */
+async function reportStateCoverage(page, name) {
+  const declared = STATES[name];
+  if (!declared) {
+    console.log(`states:  none declared for "${name}" — add it to STATES in this script`);
+    return;
+  }
+
+  // getElementsByClassName avoids having to escape class names into selectors.
+  const counts = await page.evaluate(
+    (classes) => Object.fromEntries(classes.map((c) => [c, document.getElementsByClassName(c).length])),
+    declared,
+  );
+
+  const present = declared.filter((c) => counts[c] > 0);
+  const absent = declared.filter((c) => counts[c] === 0);
+
+  console.log(`states:  ${present.length} of ${declared.length} declared — ${present.map((c) => `${c}(${counts[c]})`).join(' ') || 'none'}`);
+  if (absent.length) {
+    console.log(`         NOT RENDERED: ${absent.join(', ')}`);
+    console.log('         ^ this shot verifies nothing about them — cover them elsewhere');
+  }
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   await assertServerUp();
@@ -128,6 +200,8 @@ async function main() {
 
     const dims = `${args.width}x${args.height}${args.fullPage ? ', full page' : ''}`;
     console.log(`actual:  design/actual/${args.name}.png  (${dims})`);
+
+    await reportStateCoverage(page, args.name);
 
     if (existsSync(targetPath)) {
       await composite(browser, targetPath, actualPath, comparePath);
