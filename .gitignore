@@ -44,3 +44,6 @@ Thumbs.db
 # Design comparison output (design/target/ is committed, these are generated)
 /design/actual
 /design/compare
+
+# Claude Code worktrees (throwaway branches for parallel tasks.md steps)
+/.claude/worktrees
