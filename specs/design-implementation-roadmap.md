@@ -141,6 +141,17 @@ checkbox/icon/name, a meta line (category chip, schedule label, streak, best,
 
 > ⚠️ **Added 2026-08-18**, during the §2 build. This section did not exist in
 > the first pass and is the roadmap's largest omission so far.
+>
+> 🔴 **Corrected 2026-08-18** when the spec was written — see
+> `specs/archive/2026-08-18-habit-detail/Analyst.md` ("What the roadmap got
+> wrong") for the summary. **Five claims below are
+> wrong**: the body has **three** cards (Activity heatmap, month *circle*
+> calendar, and a `{Month} so far` summary card the section omits entirely), the
+> hero also carries three stats + Edit/Archive buttons, `<app-day-strip>` is
+> **not** reusable (7-row column-flow grid vs a linear bar row), the grid is a
+> fixed Sunday-aligned trailing window and **not** all-history, and the month
+> cells use a **second palette in which `missed` is grey, not red**. Trust the
+> Analyst, not the prose below.
 
 **Current state.** Does not exist. No route, no component.
 
@@ -313,8 +324,11 @@ Shared primitives to extract early: `<stat-card>`, a bar/sparkline component, an
 the heatmap — used across Dashboard, Habits, and Analytics.
 
 Two of the three now exist: `<app-stat-card>` (§1) and `<app-day-strip>` (§2,
-`statuses` + `hex`, which §2b re-uses at a longer window). The heatmap is still
-outstanding and belongs to §4.
+`statuses` + `hex`). ~~which §2b re-uses at a longer window~~ — **wrong**, see
+§2b's correction banner: §2b needs its own 7-row `<app-activity-grid>`, and only
+the AD-015 colour *function* is shared with `day-strip`. §4's heatmap shares
+`activity-grid`'s layout but not its colour mapping (5-step blue over all
+habits), and is still outstanding.
 
 **Page column widths are per-page, not shell-level** (global-shell AD-009) and
 they genuinely differ: Dashboard 960px, Habits 1000px, Habit detail 900px. Read

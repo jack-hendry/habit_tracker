@@ -186,6 +186,29 @@ schedule)` then `update(id, patch)` for the metadata — so a `void` return mean
 the create modal could collect eight fields and silently persist two. Widening
 is purely additive; every prior caller ignores the return.
 
+**AD-018 — The habit-detail month grid keeps its own palette; `missed` is grey.**
+(2026-08-18, `habit-detail` §2b, Analyst §2.9 D) `circleFor` in the prototype is
+a **second** palette over the same `dayStatus`, not a reuse of the Calendar
+page's. A missed day is `--circle-missed-bg` / `--circle-missed-text` (grey), not
+`--missed` (red). Two pages, two intents: the Calendar is a status grid across
+habits, while this is one habit's own record and the design deliberately chooses
+not to shout at you about it. Reusing `CS` here would paint a per-habit page in
+alarm colours the design drops on purpose. The Calendar page stays red — do not
+"align" them. Pinned by an acceptance criterion that asserts the missed cell is
+**not** `--missed`, because this is the kind of difference a later reader
+flattens for consistency.
+
+**AD-019 — `/habits/:id` is the first per-entity route, and it reads `habits()`,
+not `activeHabits()`.** (2026-08-18, `habit-detail` §2b, Analyst §2.9 E/F) Every
+prior route is a static path. Two consequences worth pinning: (1) an unknown or
+malformed id **redirects to `/habits`**, not to a 404 — the app has no designed
+404 page, and the `**` route already redirects rather than rendering one; (2) the
+component resolves against `habits()` so an **archived** habit's detail page
+still renders, which is what makes a deep link, or a back-button press right
+after archiving, resolve instead of bouncing. Only `/habits` filters by status.
+The route sits between `habits` and `**`: `path: 'habits'` is a full-path match
+and cannot swallow `/habits/x`, but the wildcard can.
+
 ## Blockers
 
 **B-001 — The Haiku-enforcement hook denied every non-`.md` edit in the repo.**
@@ -195,6 +218,25 @@ string `tasks.md` appeared in the last 60 transcript lines — and merely
 message about a spec run that was not happening. Fixed by keying the hook to an
 explicit `## Executing: <spec>` line in the root `STATE.md`, which the session
 adds when a run starts and removes when it ends. See L-004.
+
+**B-002 — The Haiku-enforcement hook was dormant for every run, shadowed by its
+own documentation.** (2026-08-18, found while starting `habit-detail` run 1,
+resolved) The hook resolves the active spec with `grep -m1 -E '^## Executing: '`
+on the root `STATE.md` — **first match wins**. That file's own explanatory
+section contains an unindented example line, `## Executing: <spec-dir-name>`,
+inside a code fence at line 11. `grep` does not know about fences, so the hook
+read the spec name as the literal `<spec-dir-name>`, found no such directory, and
+exited 0 — **dormant** — no matter what real marker was added below it.
+
+So the fix for B-001 shipped a guard that never fired: `dashboard-redesign` and
+`habits-redesign` both ran with top-level edits unblocked, and nothing reported a
+problem, because a guard failing open is silent by construction. Verified by
+simulating the hook's own grep before the `habit-detail` run rather than
+trusting the marker.
+
+Fixed by indenting the documentation example two spaces so it no longer matches
+`^## Executing: `, with a note in the file explaining why the indent is load-
+bearing. See L-019.
 
 ## Lessons
 
@@ -352,6 +394,84 @@ worked: the run halts, correctly, twelve steps in. One `grep` of the signature
 during the critic pass removed the halt entirely. Write the stop clause *and*
 check the assumption it guards — the clause is the net, not the plan.
 
+**L-019 — Prove the guard fires before trusting the run it guards.**
+(B-002) Two prior spec runs executed with the Haiku-enforcement hook silently
+dormant, because the marker they set was shadowed by an example line in the very
+file that documents the marker. Nothing failed, nothing warned — a guard that
+fails open produces exactly the output of a guard that passed. The check that
+found it took one command: run the hook's own `grep` and print what it resolves
+to. Do that when arming any hook-gated run, and prefer it to reading the file and
+concluding the marker "looks right".
+
+Corollary, and the sharper half: **documentation that contains a literal example
+of the pattern a tool greps for is part of that tool's input.** A fenced code
+block is invisible to `grep`, `sed` and every other line-oriented check. This is
+L-004's lesson arriving from the opposite direction — there the signal was too
+fuzzy to trust, here the signal was exact and the *corpus* was contaminated.
+
+**L-020 — Splitting a `tasks.md` deletes the file a hook keys on.**
+(`habit-detail`) The hook arms only for a spec with a full triad including a file
+literally named `tasks.md`. Splitting a Large spec's steps into
+`tasks-1-groundwork.md` + `tasks-2-page.md` left no `tasks.md`, so the triad check
+failed and the hook exited dormant — a second, independent way to disarm the same
+guard, introduced by a naming choice that had nothing to do with hooks. Fixed by
+keeping `tasks.md` as an index that names the current run. When a convention is
+load-bearing for tooling, renaming around it is a code change.
+
+**L-021 — Fixing an unsatisfiable check can reproduce the same defect.**
+(`habit-detail` run 1, Step 2) CriticReview R3 caught the original AC 12 claiming
+`grep -rn "strip-missed"` would hit one file when it hit four, and rewrote it to
+three checks. One of the three rewritten checks — `grep -rln "var(--strip-missed)"
+… returns exactly status-colors.ts` — was **itself unsatisfiable**, for the exact
+same reason: the `DO NOT TOUCH` spec file legitimately contains that literal
+string in its own assertions, permanently. The fix inherited the bug it was
+written to remove because the rewrite treated "narrow the grep" as the fix
+without re-checking whether the narrowed grep could still be defeated by the same
+file. The executor's judgment call — reading "only status-colors.ts + spec
+assertions" as a pass rather than blindly failing, or worse, editing the
+forbidden file to satisfy the check — is what kept this from becoming a real
+defect. Do not rely on that: verify a rewritten check against the exact files its
+own `DO NOT TOUCH` list protects, not just against the file it's meant to catch.
+
+**L-022 — A route parameter read from `snapshot` pins a reused component.**
+(`habit-detail` run 2) `HabitDetailComponent` captured
+`route.snapshot.paramMap.get('id')` into a plain field. Angular **reuses the
+component instance** when only the route parameter changes — same route config,
+so `/habits/a` → `/habits/b` does not reconstruct the class — and the field kept
+the first id forever: the page rendered habit A's name, tint, stats and calendar
+while the URL said B. Invisible in every other spec, because they each navigate
+once from a fresh `TestBed`. Read a `:param` as a signal (`toSignal` over
+`route.paramMap`) whenever the component can be reached twice, and put any
+guard that depends on it — here the unknown-id redirect — in an `effect`, not
+only in the constructor, or the guard is equally one-shot.
+
+**L-023 — A `DO NOT TOUCH` enforced by `git diff` cannot see a revert.**
+(`habit-detail` run 2, Step 1) The check was "`git diff --stat <path>` is empty".
+Run 1 was still **uncommitted**, so a file reverted to `HEAD` produces exactly
+the same empty diff as a file nobody touched — and an executor did revert
+`day-strip.component.ts`, undoing run 1's whole extraction and silently breaking
+AC 12, while the check reported green. The bug is comparing against the wrong
+baseline: a diff-based check measures distance from the last **commit**, but a
+`DO NOT TOUCH` in a multi-run spec means distance from the **previous run's
+result**, which is only in the working tree. Assert the file's *content*
+(`grep -c "stripCellColor" …` returns 1), not its diff, whenever the state you
+are protecting has not been committed. A sibling of L-021: both are checks that
+could not fail.
+
+**L-024 — A named assertion can still be hollow.**
+(`habit-detail` run 2) L-017 says predict the assertions, not the `it` count.
+This run showed the next failure mode: three assertions arrived with exactly the
+names the plan specified and exercised nothing. `'the hero background changes
+with different habit colors'` seeded one habit; rewritten, it seeded two and then
+compared `hexAlpha(sky)` to `hexAlpha(emerald)` — restating that a pure function
+is injective, never re-reading the DOM. `'completions counts due-day completions
+only'` ticked a **daily** habit, so the tick was on a due day and the split it
+names was never exercised. Each was green, and each was structurally incapable
+of failing for its own stated reason. When reviewing delegated tests, read what
+the body *does* and ask what edit would make it fail; a name matching the plan is
+not evidence. Fixing the first one is what uncovered L-022 — the hollow assertion
+had been hiding a real bug the whole time.
+
 ## Quick Tasks
 
 *Small work done without a spec (3 files or fewer, one sentence describes it).*
@@ -362,13 +482,13 @@ check the assumption it guards — the clause is the net, not the plan.
 | design-compare tooling | ✓ Done | `scripts/design-shot.mjs`, `npm run design:shot`, `/design-check`. Playwright screenshot → composite beside `design/target/<name>.png`. Tooling only |
 | Fix the Haiku-enforcement hook | ✓ Done | See B-001 / L-004 |
 | Consolidate the two `STATE.md` files | ✓ Done | See AD-008 |
-| Replace the literal NUL byte in `habit-list.component.ts`'s `UNCATEGORISED` sentinel with a `\0` escape | 📋 Open | git treats the file as binary and `grep` skips it (found during 4b) |
+| Replace the literal NUL byte in `habit-list.component.ts`'s `UNCATEGORISED` sentinel with a `\0` escape | ✓ Done | Closed by `habit-detail` run 1, Step 1. File now reports as text and `grep` sees it (L-016) |
 | Split `HabitListComponent` | 📋 Open | Its SCSS is 7.82 kB against a 6 kB warn budget, and 4c will add more to the same file |
 | Demo-data seeding for design checks | ✓ Done | `scripts/demo-data.mjs` (six habits, 126 days, the prototype's own LCG) + `scripts/seed-demo.mjs` + `--seed` on `design-shot.mjs`. Tooling only — nothing under `src/` imports it. See L-014 |
 | Split `HabitListComponent` (SCSS over budget) | ✓ Done | Closed by `habits-redesign` — extracting `<app-habit-form>` and `<app-day-strip>` took the file from 7.82 kB (1.82 kB over the 6 kB warn, 2.18 kB from the 10 kB **error**) to no warning at all. It was not a tidy-up: the row restyle could not land until it did |
 | Tokenise the 29 pre-AD-009 hex literals in the edit form | ✓ Done | `habits-redesign` Step 7b. `#ccc`/`#555`/`#222`/`#f0f0f0` predated the redesign palette entirely; extracting the form into `shared/habit-form/` is what made them visible. See L-016 |
 | Back-fill component coverage for pause / resume / archive / reactivate / delete-confirm | 📋 Open | `habits-redesign` CriticReview R1: the page had **zero** component specs before this slice. It now has 12 (`getScheduleLabel`, create modal, row rendering) but these five transitions are still untested at the component level. Sized **Small** |
-| Add a habit-detail route (roadmap §2b) | 📋 Open | **Not Small** — sized Large, needs its own spec. Listed here only so it is not lost: the habit name on `/habits` is deliberately static text today, and becomes a `routerLink` when §2b lands. See L-015 |
+| Add a habit-detail route (roadmap §2b) | ✓ Done | Closed by `habit-detail` (Large, 2 runs). `/habits/:id` exists and the habit name on `/habits` is now a `routerLink` — added **last**, in run 2 Step 12, because adding it before the route existed would have sent every click through `**` to the Dashboard. See AD-019 |
 | **`isLapsed` makes "Overdue / slipping" useless once history exists** | 📋 Open | Found by the §1 design check, **not** introduced by it. `isLapsed` = "≥1 missed day ever", so after a few weeks *every* habit qualifies: the section listed all six demo habits, three of them labelled "last done today". The target shows one. The prototype's rule is "not done today **and** last done ≥2 days ago" (`!doneToday && lastAgo >= 2`). Deliberately left alone — bucket definitions were out of scope for `dashboard-redesign` (§4) and this changes behaviour, not appearance. Sized **Small** (one computed, `dashboard.component.ts`) if adopted |
 
 ---
@@ -387,7 +507,7 @@ check the assumption it guards — the clause is the net, not the plan.
 | **R0** | Redesign §0 — global shell (top bar, tokens, 2 stub routes) | ✅ Done, unmerged | `archive/2026-07-26-global-shell/` |
 | **R1** | Redesign §1 — Dashboard (4 stat cards, `<app-stat-card>`, row restyle) | ✅ Done, uncommitted | `archive/2026-08-18-dashboard-redesign/` |
 | **R2** | Redesign §2 — Habits (row restyle, `<app-day-strip>`, `<app-habit-form>`, create modal) | ✅ Done, uncommitted | `habits-redesign/` |
-| **R2b** | Redesign §2b — Habit detail page (**new**, missed by the original roadmap pass) | 📋 Planned | — (roadmap §2b; Large) |
+| **R2b** | Redesign §2b — Habit detail page (**new**, missed by the original roadmap pass) | ✅ Done, uncommitted — 163 → **218** tests | `habit-detail/` (Large, split into 2 runs) |
 | **R3–R5** | Redesign §3–§5 (Calendar, Analytics, Stacks) | 📋 Planned | — (see `design-implementation-roadmap.md`) |
 | — | Angular 17 → 21 upgrade (four major hops) | ✅ Done | `archive/2026-07-17-upgrade-angular-21/` |
 
