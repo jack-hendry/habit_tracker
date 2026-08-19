@@ -143,6 +143,19 @@ export function colorOf(id?: string): HabitColor {
   return HABIT_COLORS.find((c) => c.id === id) ?? HABIT_COLORS[0];
 }
 
+/**
+ * A palette hex at partial opacity, as `rgba(r,g,b,a)`. The habit-detail hero
+ * band (§2b) tints itself with the habit's own colour at 9% — the tint is
+ * derived per habit, never a fixed value (roadmap §2b Critic Review).
+ *
+ * `hex` is always a 6-digit `#rrggbb` from `HABIT_COLORS`; this is not a general
+ * CSS colour parser.
+ */
+export function hexAlpha(hex: string, alpha: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+}
+
 /** Resolve a stored icon id. Same fallback contract as `colorOf`. */
 export function iconOf(id?: string): HabitIcon {
   return HABIT_ICONS.find((i) => i.id === id) ?? HABIT_ICONS[0];

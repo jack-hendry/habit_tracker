@@ -74,6 +74,20 @@
   --strip-not-due: #f5f5f3;
   --pill-muted-bg: #f4f4f2;
   --backdrop: rgba(0, 0, 0, 0.32);
+
+  /* Habit detail §2b — sampled from the prototype's `isGoal` block. The cards
+     use a 10px radius, not --radius-card's 8px: a real per-page difference.
+     --circle-missed-* is the month grid's GREY miss — the Calendar page's red
+     --missed is deliberately not reused here (Analyst §2.9 D). --card-divider
+     is #f0f0ee and --rule is #efefec: two sampled near-greys, not one (L-012). */
+  --radius-card-lg: 10px;
+  --circle-missed-bg: #f0f1f3;
+  --circle-missed-text: #8a93a1;
+  --text-ghost: #c2c6cc;
+  --arrow-disabled: #d5d5d2;
+  --card-divider: #f0f0ee;
+  --hero-rule: rgba(0, 0, 0, 0.12);
+  --hero-tile-border: rgba(0, 0, 0, 0.1);
 }
 
 /* `margin: 0` makes the sticky bar genuinely full-bleed; the background is on

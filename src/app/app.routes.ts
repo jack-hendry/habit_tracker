@@ -12,6 +12,14 @@ export const routes: Routes = [
       import('./habit/habit-list.component').then((m) => m.HabitListComponent),
   },
   {
+    // Before `**`, after `habits` — `path: 'habits'` is a full-path match and
+    // cannot swallow `/habits/:id`, but the wildcard would. First per-entity
+    // route in the app (Analyst §2.1).
+    path: 'habits/:id',
+    loadComponent: () =>
+      import('./habit-detail/habit-detail.component').then((m) => m.HabitDetailComponent),
+  },
+  {
     path: 'calendar',
     loadComponent: () =>
       import('./calendar/calendar.component').then((m) => m.CalendarComponent),

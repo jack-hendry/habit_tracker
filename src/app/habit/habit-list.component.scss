@@ -169,6 +169,12 @@ h1 {
   font-size: 14.5px;
   font-weight: 600;
   color: var(--text-strong);
+  color: inherit;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
 }
 
 .habit-meta {

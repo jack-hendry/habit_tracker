@@ -122,7 +122,7 @@
               <div class="habit-main">
                 <div class="habit-header">
                   <span class="habit-icon" aria-hidden="true">{{ iconGlyph(habit) }}</span>
-                  <span class="habit-name">{{ habit.name }}</span>
+                  <a class="habit-name" [routerLink]="['/habits', habit.id]">{{ habit.name }}</a>
                   @if (isPaused(habit.id)) {
                     <span class="paused-badge">Paused</span>
                   }

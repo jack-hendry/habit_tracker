@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { HabitListComponent } from './habit-list.component';
 import { HabitService } from './habit.service';
 
@@ -10,7 +11,7 @@ describe('HabitListComponent', () => {
     localStorage.clear();
     await TestBed.configureTestingModule({
       imports: [HabitListComponent],
-      providers: [HabitService],
+      providers: [HabitService, provideRouter([])],
     }).compileComponents();
 
     fixture = TestBed.createComponent(HabitListComponent);

@@ -1,5 +1,5 @@
 import { HabitService } from './habit.service';
-import { Habit, HABIT_COLORS, HABIT_ICONS, colorOf, iconOf } from './habit.model';
+import { Habit, HABIT_COLORS, HABIT_ICONS, colorOf, iconOf, hexAlpha } from './habit.model';
 
 describe('HabitService', () => {
   beforeEach(() => {
@@ -1337,5 +1337,114 @@ describe('HabitService — Dashboard §1 (topCurrentStreak, dueTodayCounts)', ()
     });
 
     expect(service.dueTodayCounts([dueDone, duePending, offSchedule], FRI_17)).toEqual({ due: 2, done: 1 });
+  });
+});
+
+describe('hexAlpha', () => {
+  it('converts a hex colour to rgba with the given alpha', () => {
+    expect(hexAlpha('#0ea5e9', 0.09)).toBe('rgba(14,165,233,0.09)');
+  });
+
+  it('does not lose zero channels', () => {
+    expect(hexAlpha('#000000', 1)).toBe('rgba(0,0,0,1)');
+  });
+
+  it('composes with colorOf palette lookups', () => {
+    expect(hexAlpha(colorOf('sky').hex, 0.09)).toBe('rgba(14,165,233,0.09)');
+  });
+});
+
+describe('Service derivations: activityWindowDays, lifetimeCounts, monthToDateCounts', () => {
+  let service: HabitService;
+
+  beforeEach(() => {
+    localStorage.clear();
+    service = new HabitService();
+  });
+
+  function habit(overrides: Partial<Habit> = {}): Habit {
+    return {
+      id: 'h',
+      name: 'H',
+      createdAt: '2026-07-13T12:00:00Z',
+      completedDates: [],
+      schedule: { type: 'daily' },
+      startDate: '2026-07-13',
+      ...overrides,
+    };
+  }
+
+  describe('activityWindowDays', () => {
+    it('returns 120 for a Sunday', () => {
+      // 2026-08-16 is a Sunday
+      const sunday = new Date(2026, 7, 16);
+      expect(service.activityWindowDays(sunday)).toBe(120);
+    });
+
+    it('returns 126 for a Saturday', () => {
+      // 2026-08-15 is a Saturday
+      const saturday = new Date(2026, 7, 15);
+      expect(service.activityWindowDays(saturday)).toBe(126);
+    });
+
+    it('ensures the window start is always a Sunday for multiple weekdays', () => {
+      for (let dayOfWeek = 0; dayOfWeek < 7; dayOfWeek++) {
+        // Create a date with dayOfWeek (0=Sun, 1=Mon, etc.)
+        // 2026-08-16 is a Sunday, so add dayOfWeek to get the desired day
+        const testDate = new Date(2026, 7, 16 + dayOfWeek);
+        const windowDays = service.activityWindowDays(testDate);
+        const windowStart = HabitService.shiftIso(HabitService.todayIso(testDate), -(windowDays - 1));
+        const [y, m, d] = windowStart.split('-').map(Number);
+        const startWeekday = new Date(y, m - 1, d).getDay();
+        expect(startWeekday).toBe(0, `Failed for ${testDate.toDateString()}`);
+      }
+    });
+  });
+
+  describe('lifetimeCounts', () => {
+    it('counts only due days', () => {
+      // Daily habit with 1 completion on its start date, 1 off-schedule
+      const h = habit({ completedDates: ['2026-07-13', '2026-07-14'] });
+      const counts = service.lifetimeCounts(h, new Date(2026, 6, 14));
+      expect(counts.done).toBe(2);
+      expect(counts.countable).toBe(2);
+    });
+
+    it('returns { done: 0, countable: 0 } for a habit with no resolved due day', () => {
+      const h = habit({ completedDates: [] });
+      const counts = service.lifetimeCounts(h, new Date(2026, 6, 12)); // before start date
+      expect(counts).toEqual({ done: 0, countable: 0 });
+    });
+  });
+
+  describe('monthToDateCounts', () => {
+    it('clamps at today: mid-month today does not count the rest as missed', () => {
+      const h = habit({
+        schedule: { type: 'daily' },
+        startDate: '2026-07-01',
+        completedDates: ['2026-07-15'],
+      });
+      // Today is 2026-07-15, so the window is 2026-07-01 to 2026-07-15
+      // 15 days total, 1 done
+      const today = new Date('2026-07-15T00:00:00');
+      const counts = service.monthToDateCounts(h, 2026, 6, today);
+      expect(counts.countable).toBe(15);
+      expect(counts.done).toBe(1);
+    });
+
+    it('counts the whole month if it is fully in the past', () => {
+      const completedDates = Array.from({ length: 31 }, (_, i) => `2026-07-${String(i + 1).padStart(2, '0')}`);
+      const h = habit({
+        schedule: { type: 'daily' },
+        startDate: '2026-07-01',
+        completedDates,
+      });
+      // Today is 2026-08-15, so July (month 6) is fully past
+      // All 31 days of July should be counted
+      const today = new Date('2026-08-15T00:00:00');
+      const counts = service.monthToDateCounts(h, 2026, 6, today);
+      expect(counts.countable).toBe(31);
+      expect(counts.done).toBe(31);
+    });
   });
 });

@@ -1,5 +1,6 @@
 import { Component, input } from '@angular/core';
 import { DayStatus } from '../../habit/habit.model';
+import { stripCellColor } from '../status-colors';
 
 /**
  * The 30-day completion strip on the Habits page (roadmap §2). One 8×22px cell
@@ -24,9 +25,5 @@ export class DayStripComponent {
    * daily and unticked on the mockup's today and its last cell is #e9e9e7.
    * `future` cannot occur in a window ending today; mapped for totality.
    */
-  cellColor(status: DayStatus): string {
-    if (status === 'done') return this.hex();
-    if (status === 'missed' || status === 'pending') return 'var(--strip-missed)';
-    return 'var(--strip-not-due)';
-  }
+  cellColor(status: DayStatus): string { return stripCellColor(status, this.hex()); }
 }

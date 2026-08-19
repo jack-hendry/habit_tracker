@@ -1,0 +1,5 @@
+<div class="cells">
+  @for (status of statuses(); track $index) {
+    <span class="cell" [style.background]="cellColor(status)"></span>
+  }
+</div>

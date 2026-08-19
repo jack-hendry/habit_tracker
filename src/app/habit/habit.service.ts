@@ -24,6 +24,26 @@ export class HabitService {
   readonly activeHabits = computed(() => this._habits().filter((h) => h.status !== 'archived'));
 
   /**
+   * Distinct categories in use from active habits only, deduped
+   * **case-insensitively** so "Health" and "health" are one entry, keeping the
+   * first-seen casing (CriticReview R5). Archived habits do not contribute to
+   * the filter dropdown (R10 — leaving an archived habit's category there means
+   * it lingers forever in the dropdown).
+   */
+  readonly categories = computed(() => {
+    const seen = new Map<string, string>();
+    for (const habit of this.activeHabits()) {
+      if (habit.category) {
+        const key = habit.category.toLowerCase();
+        if (!seen.has(key)) {
+          seen.set(key, habit.category);
+        }
+      }
+    }
+    return [...seen.values()].sort((a, b) => a.localeCompare(b));
+  });
+
+  /**
    * Today's calendar date as `YYYY-MM-DD` in the user's **local** timezone.
    * Deliberately not `toISOString()`, which is UTC and would misattribute
    * evening/early-morning completions to the wrong day.
@@ -505,6 +525,45 @@ export class HabitService {
     }
 
     return { done, countable };
+  }
+
+  /**
+   * The length of the Sunday-aligned 18-week window ending today. 17 full weeks
+   * plus the current partial week means the window's first day is always a
+   * Sunday, which is what makes the 7-row grid's rows align to weekdays.
+   * Range is 120–126.
+   */
+  activityWindowDays(today: Date = new Date()): number {
+    return 17 * 7 + new Date(today).getDay() + 1;
+  }
+
+  /**
+   * Completion counts for a single habit across its entire lifetime (from start
+   * date to today). Uses the standard due-day contract: numerator = due days
+   * that are `done`; denominator = due days that are `done` or `missed`.
+   * If the habit has no resolved due day, returns `{ done: 0, countable: 0 }`.
+   */
+  lifetimeCounts(habit: Habit, today: Date = new Date()): { done: number; countable: number } {
+    const fromIso = this.earliestStartIso([habit]);
+    if (fromIso === null) {
+      return { done: 0, countable: 0 };
+    }
+    return this.poolCounts([habit], fromIso, HabitService.todayIso(today), today);
+  }
+
+  /**
+   * Completion counts for a single habit within a specific calendar month,
+   * clamped at today (so a mid-month `today` does not count the rest of the
+   * month as missed). Month is 0-based (JS convention, matching `monthGrid`).
+   * If the whole month is in the future, `from > to` and `poolCounts` returns
+   * zeros — that is correct, not a case to special-case.
+   */
+  monthToDateCounts(habit: Habit, year: number, month: number, today: Date = new Date()): { done: number; countable: number } {
+    const firstOfMonth = HabitService.todayIso(new Date(year, month, 1));
+    const lastOfMonth = HabitService.todayIso(new Date(year, month + 1, 0));
+    const todayIso = HabitService.todayIso(today);
+    const toIso = todayIso < lastOfMonth ? todayIso : lastOfMonth;
+    return this.poolCounts([habit], firstOfMonth, toIso, today);
   }
 
   /**
