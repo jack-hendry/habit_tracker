@@ -5,6 +5,12 @@
 #   2. Summary gate  — every file newly added under specs/archive/ must be
 #      small. Oversized files mean the spec was archived with its drafts and
 #      back-and-forth still in it instead of being summarized first.
+#   3. Lessons gate  — every L-NNN headline in specs/STATE.md has a body in
+#      specs/LESSONS.md, and vice versa. The headline is the lesson and lives
+#      where it will be read; the body is its provenance. Splitting them is
+#      what keeps STATE.md inside its size budget, so the two must not drift.
+#      Unlike gates 1-2 this runs on EVERY push, not only archive pushes —
+#      a lesson can drift in any commit.
 #
 # This script CHECKS. It never edits files or commits on your behalf — on
 # failure it prints the exact fix and exits non-zero so the push is refused.
@@ -34,6 +40,38 @@ else
 fi
 
 echo "clean-table-check: checking range ${RANGE}"
+
+# --- Gate 3: lessons correspondence -------------------------------------
+# Checked against the pushed tree (HEAD), not the working tree. No-op until
+# specs/LESSONS.md exists, so this is safe on branches predating the split.
+if git cat-file -e "HEAD:specs/LESSONS.md" 2>/dev/null; then
+  LESSON_TMP="$(mktemp -d)"
+  trap 'rm -rf "$LESSON_TMP"' EXIT
+
+  git show HEAD:specs/STATE.md 2>/dev/null \
+    | sed -n 's/^- \*\*\(L-[0-9]\{3\}\)\*\*.*/\1/p' | sort -u >"$LESSON_TMP/headlines"
+  git show HEAD:specs/LESSONS.md 2>/dev/null \
+    | sed -n 's/^\*\*\(L-[0-9]\{3\}\) .*/\1/p' | sort -u >"$LESSON_TMP/bodies"
+
+  MISSING_BODY="$(grep -vxF -f "$LESSON_TMP/bodies" "$LESSON_TMP/headlines" || true)"
+  MISSING_HEADLINE="$(grep -vxF -f "$LESSON_TMP/headlines" "$LESSON_TMP/bodies" || true)"
+
+  if [[ -n "$MISSING_BODY" || -n "$MISSING_HEADLINE" ]]; then
+    echo "Lessons are out of sync between specs/STATE.md and specs/LESSONS.md." >&2
+    if [[ -n "$MISSING_BODY" ]]; then
+      echo "  Headline in STATE.md with no body in LESSONS.md:" >&2
+      echo "$MISSING_BODY" | sed 's/^/    - /' >&2
+      echo "  Write the body (provenance: which spec, what broke, why)." >&2
+    fi
+    if [[ -n "$MISSING_HEADLINE" ]]; then
+      echo "  Body in LESSONS.md with no headline in STATE.md:" >&2
+      echo "$MISSING_HEADLINE" | sed 's/^/    - /' >&2
+      echo "  Add '- **L-NNN** — <the lesson in one line>' to STATE.md." >&2
+    fi
+    exit 1
+  fi
+  echo "clean-table-check: lessons in sync ($(wc -l <"$LESSON_TMP/headlines" | tr -d ' ') entries)"
+fi
 
 DIFF_OUTPUT="$(git diff --name-status -M "$RANGE" -- || true)"
 
