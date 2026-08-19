@@ -216,6 +216,7 @@ disagree.
 - **L-022** — A route parameter read from `snapshot` pins a reused component.
 - **L-023** — A `DO NOT TOUCH` enforced by `git diff` cannot see a revert.
 - **L-024** — A named assertion can still be hollow.
+- **L-025** — A rule with the right token can still lose to the rule above it.
 
 ## Quick Tasks
 
@@ -252,8 +253,8 @@ disagree.
 | **5** | Notifications (time-based reminders, PWA) | 📋 Planned | — |
 | **R0** | Redesign §0 — global shell (top bar, tokens, 2 stub routes) | ✅ Done, unmerged | `archive/2026-07-26-global-shell/` |
 | **R1** | Redesign §1 — Dashboard (4 stat cards, `<app-stat-card>`, row restyle) | ✅ Done, uncommitted | `archive/2026-08-18-dashboard-redesign/` |
-| **R2** | Redesign §2 — Habits (row restyle, `<app-day-strip>`, `<app-habit-form>`, create modal) | ✅ Done, uncommitted | `habits-redesign/` |
-| **R2b** | Redesign §2b — Habit detail page (**new**, missed by the original roadmap pass) | ✅ Done, uncommitted — 163 → **218** tests | `habit-detail/` (Large, split into 2 runs) |
+| **R2** | Redesign §2 — Habits (row restyle, `<app-day-strip>`, `<app-habit-form>`, create modal) | ✅ Done, unmerged | `archive/2026-08-19-habits-redesign/` |
+| **R2b** | Redesign §2b — Habit detail page (**new**, missed by the original roadmap pass) | ✅ Done, uncommitted — 163 → **218** tests | `archive/2026-08-18-habit-detail/` (Large, split into 2 runs) |
 | **R3–R5** | Redesign §3–§5 (Calendar, Analytics, Stacks) | 📋 Planned | — (see `design-implementation-roadmap.md`) |
 | — | Angular 17 → 21 upgrade (four major hops) | ✅ Done | `archive/2026-07-17-upgrade-angular-21/` |
 

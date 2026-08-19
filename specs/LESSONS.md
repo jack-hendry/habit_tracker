@@ -242,3 +242,20 @@ the body *does* and ask what edit would make it fail; a name matching the plan i
 not evidence. Fixing the first one is what uncovered L-022 — the hollow assertion
 had been hiding a real bug the whole time.
 
+
+**L-025 — A rule with the right token can still lose to the rule above it.**
+(`habits-redesign` Step 13, the final design check) `tasks.md` specified the
+Delete button as exactly two properties — `border-color: var(--danger-border)`
+and `color: var(--danger-text)` on `.delete-button` — and the executor
+transcribed them faithfully. It rendered grey. Sitting a few lines above was
+`.habit-actions button { border: 1px solid var(--control-border); color:
+var(--text) }`: specificity `(0,1,1)` against `.delete-button`'s `(0,1,0)`, so
+the shorthand `border` and the `color` both won and the override never fired.
+Every check the spec could run passed — tokens present, AC 3's raw-hex grep
+clean, suite green, build clean — because all of them ask *whether the value is
+written*, and none asks *whether the selector carrying it applies*. Only the
+composite saw it. Sampling a value from the prototype (L-012) settles what the
+value is and says nothing about whether it reaches the pixel. When a spec writes
+a one-property override next to an element-scoped base rule, scope the override
+the same way (`.habit-actions .delete-button`), or it is decoration on a rule
+that never fires. The sibling of L-021 and L-023: a check that could not fail.

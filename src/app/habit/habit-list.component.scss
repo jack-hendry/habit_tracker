@@ -265,9 +265,11 @@ h1 {
   cursor: pointer;
 }
 
-/* Delete differs from its neighbours in exactly two properties. */
-.delete-button,
-.delete-button.confirming {
+/* Delete differs from its neighbours in exactly two properties. Scoped under
+   `.habit-actions` so it outweighs `.habit-actions button` above — an unscoped
+   `.delete-button` loses on specificity and renders grey (design check, Step 13). */
+.habit-actions .delete-button,
+.habit-actions .delete-button.confirming {
   border-color: var(--danger-border);
   color: var(--danger-text);
 }
