@@ -1,4 +1,105 @@
 <div class="page-container">
-  <h1>Analytics</h1>
-  <p class="placeholder">Charts, streak history and the completion heatmap land in roadmap §4.</p>
+  <div class="header">
+    <h1>Analytics</h1>
+    @if (subtitle()) {
+      <span class="subtitle">{{ subtitle() }}</span>
+    }
+  </div>
+
+  @if (hasHabits()) {
+    <div class="stat-row">
+      <app-stat-card
+        [label]="'Completion rate'"
+        [value]="overallRate()"
+      />
+      <app-stat-card
+        [label]="'Habits completed'"
+        [value]="totalDone()"
+      />
+      <app-stat-card
+        [label]="'Perfect days'"
+        [value]="perfectDays()"
+      />
+      <app-stat-card
+        [label]="'Best active streak'"
+        [value]="topStreak()"
+        unit="days 🔥"
+      />
+    </div>
+
+    <div class="card heatmap-card">
+      <div class="heatmap-header">
+        <h2>All-habit activity</h2>
+        <div class="legend">
+          <span>Less</span>
+          <div class="swatches">
+            <div class="swatch" [style.background]="'var(--heat-0)'"></div>
+            <div class="swatch" [style.background]="'var(--heat-1)'"></div>
+            <div class="swatch" [style.background]="'var(--heat-2)'"></div>
+            <div class="swatch" [style.background]="'var(--heat-3)'"></div>
+            <div class="swatch" [style.background]="'var(--heat-4)'"></div>
+          </div>
+          <span>More</span>
+        </div>
+      </div>
+      <app-heat-grid
+        [rates]="heatRates()"
+        [startIso]="heatStartIso()"
+      />
+    </div>
+
+    <div class="two-column-row">
+      <div class="leaderboard-card card">
+        <h2>Habit leaderboard</h2>
+        <div class="leaderboard-rows">
+          @for (h of ranked(); let i = $index; track h.habit.id) {
+            <div class="leaderboard-row">
+              <div class="rank">{{ i + 1 }}</div>
+              <div class="habit-cell">
+                <span class="glyph">{{ h.glyph }}</span>
+                <a [routerLink]="'/habits/' + h.habit.id" class="habit-name">{{ h.habit.name }}</a>
+              </div>
+              <div class="track">
+                <div class="fill" [style.width]="(h.hasRate ? h.rate : 0) + '%'" [style.background]="h.hex"></div>
+              </div>
+              <div class="rate-text">{{ h.hasRate ? (h.rate + '%') : '—' }}</div>
+            </div>
+          }
+        </div>
+      </div>
+
+      <div class="right-column">
+        <div class="card bar-chart-card">
+          <h2>Completions per day · last 14</h2>
+          <app-bar-chart [bars]="bars()" />
+        </div>
+
+        <div class="card weekday-card">
+          <h2>Completion by weekday</h2>
+          @if (bestDayName()) {
+            <p class="insight">{{ bestDayName() }}s are your strongest</p>
+          }
+          <div class="weekday-rows">
+            @for (day of weekdays(); track $index) {
+              <div [class]="'weekday-row ' + (day.best ? 'dow-best' : 'dow-rest')">
+                <div class="day-name" [style.font-weight]="day.best ? '700' : '500'">{{ day.name }}</div>
+                <div class="track">
+                  @if (day.hasRate) {
+                    <div
+                      class="fill"
+                      [class]="day.best ? 'bar-max' : 'bar-rest'"
+                      [style.width]="day.pctNum + '%'"
+                    ></div>
+                  }
+                </div>
+                <div class="pct">{{ day.pct }}</div>
+              </div>
+            }
+          </div>
+        </div>
+      </div>
+    </div>
+  } @else {
+    <p class="empty-state">No habits yet. Create one to start tracking your progress.</p>
+  }
 </div>

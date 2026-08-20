@@ -1,0 +1,17 @@
+<div class="bar-row">
+  @for (bar of bars(); track $index) {
+    <div class="bar-column">
+      <div class="bar-container">
+        <div
+          [class]="'bar ' + barClass(bar.value)"
+          [style.height]="heightPercent(bar.value)"
+        ></div>
+      </div>
+      <div
+        [class]="'label ' + barClass(bar.value)"
+      >
+        {{ bar.label }}
+      </div>
+    </div>
+  }
+</div>

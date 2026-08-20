@@ -1,0 +1,47 @@
+.bar-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.bar-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.bar-container {
+  height: 96px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.bar {
+  width: 16px;
+  border-radius: 3px 3px 0 0;
+
+  &.bar-max {
+    background: var(--bar-max);
+  }
+
+  &.bar-rest {
+    background: var(--bar-rest);
+  }
+}
+
+.label {
+  font-size: 10px;
+  font-weight: 600;
+  text-align: center;
+  white-space: nowrap;
+
+  &.bar-max {
+    color: var(--bar-max);
+  }
+
+  &.bar-rest {
+    color: var(--bar-label);
+  }
+}

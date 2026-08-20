@@ -226,6 +226,62 @@ mutation, not by being green: pointing `--cal-done-bg` at #f4fbf6 fails it, and
 so does collapsing a day-number colour to grey. This is the mechanism that
 covers what a screenshot structurally cannot (L-026).
 
+**AD-023 — The leaderboard ranks by `lifetimeCounts`, not `completionRate`.**
+(2026-08-19, `analytics` CriticReview R1/R2) The leaderboard plan originally
+bound rows to `completionRate(habit)`, which returns `1` for a habit with no
+resolved due day — a brand-new habit would rank first at 100%, contradicting
+AD-010's `countable === 0` → `—` rule — and the fraction it returns is 0–1, not
+0–100, so binding it straight to `width:{rate}%` renders 1px-wide bars. Fixed
+by scoring each row from `HabitService.lifetimeCounts(habit)` directly:
+`countable === 0` rows render `—` with a 0-width bar and sort last regardless
+of tie order, everyone else gets `Math.round(done/countable*100)`.
+`completionRate` itself is unchanged — it is pinned by the Dashboard and
+Habit-detail specs — this is a second, per-habit caller choosing the right
+primitive instead of the closest-sounding one.
+
+**AD-024 — The bar chart and weekday "best" highlight the maximum, not "today"
+or an arbitrary tie-winner.** (2026-08-19, `analytics` §0.1, "§4's version of
+AD-011") The 14-day bar chart highlights `bb.v === mx` in the prototype — the
+tallest bar — not the current day's bar; getting this backwards produces a
+page that matches the mockup today and is wrong every other day.
+`BarChartComponent.isHighlighted` follows suit, with one deliberate deviation
+from the source: when every bar is zero, the app highlights nothing rather
+than all bars, so a habit-free window doesn't paint every column in the
+accent colour. The weekday card's "best day" pick is the same case one level
+up — earliest weekday wins a tie, matching `topCurrentStreak`'s documented
+tie rule — and a page with no resolved weekday (`bestRate === null`) names no
+best day, echoing AD-011's "returns null rather than crediting nothing."
+
+**AD-025 — Analytics needs three separate per-day derivations, not two.**
+(2026-08-19, `analytics` CriticReview R10, extends AD-014) `dailyPooledRates`
+(heatmap) is due-guarded like `poolCounts`; `dailyDoneCounts` (bar chart) is a
+raw completion tally with no `isDueOn` guard, like `recentStatuses`. Merging
+them into one per-day pass — tempting, since both walk the same date range —
+would force one of the two callers to consume the wrong semantics, which is
+exactly the unification AD-014 forbids for the day-strip vs. the rate.
+Confirmed, not new: the reasoning is now written into the Analyst directly
+instead of living only in AD-014's original context, so a future reader
+touching either derivation sees why they don't collapse.
+
+**AD-026 — `<app-heat-grid>` stays a separate component from the
+day-strip/activity-grid family.** (2026-08-19, `analytics` CriticReview R11,
+extends AD-018) The heatmap's cell shape (`rate: number | null` per day, a
+five-step colour ramp) and the day-strip family's shape (a status enum,
+per-habit colour) are different input contracts and different colour modes on
+the same "grid of days" geometry. AD-018 already established, for the
+habit-detail month grid vs. the Calendar page, that shared geometry does not
+imply a shared component when the two modes are mutually exclusive — the same
+call applies here instead of parameterising one component with a mode flag.
+
+**AD-027 — `--heat-4` and `--bar-max` are `--accent` by identity, not by a
+coincidentally equal hex.** (2026-08-19, `analytics` §6) Both tokens are
+declared as `var(--accent)` rather than a re-sampled `#0066cc` literal. They
+are the same colour because they are the same design role — the heatmap's
+topmost activity step and the bar chart's highlight are both "this is the
+accent, doing its job as the strongest signal on the page" — and aliasing
+says so in the token itself instead of leaving two literals that happen to
+agree today and can silently drift apart in a future edit.
+
 ## Blockers
 
 **B-001 — The Haiku-enforcement hook denied every non-`.md` edit in the repo.** → moved to `STATE-ARCHIVE.md`
@@ -269,6 +325,8 @@ disagree.
 - **L-026** — A design screenshot only checks the states its seed happens to render.
 - **L-027** — A second pass must re-open the source, not re-read the spec.
 - **L-028** — A guard keyed to one tool's input shape is not a guard on the action.
+- **L-029** — A verification step's mechanism must be checked against what it's checking, not assumed to see it.
+- **L-030** — A mutation check against already-sorted data can pass with the comparator deleted.
 
 ## Quick Tasks
 
@@ -308,7 +366,8 @@ disagree.
 | **R2** | Redesign §2 — Habits (row restyle, `<app-day-strip>`, `<app-habit-form>`, create modal) | ✅ Done, unmerged | `archive/2026-08-19-habits-redesign/` |
 | **R2b** | Redesign §2b — Habit detail page (**new**, missed by the original roadmap pass) | ✅ Done, uncommitted — 163 → **218** tests | `archive/2026-08-18-habit-detail/` (Large, split into 2 runs) |
 | **R3** | Redesign §3 — Calendar (one card, per-status day numbers, Today ring) | ✅ Done, unmerged — 236 → **251** tests | `archive/2026-08-19-calendar-redesign/` |
-| **R4–R5** | Redesign §4–§5 (Analytics, Stacks) | 📋 Planned | — (see `design-implementation-roadmap.md`) |
+| **R4** | Redesign §4 — Analytics (stat row, heatmap, leaderboard, bar chart, weekday card) | ✅ Done, uncommitted — 251 → **339** tests | `archive/2026-08-20-analytics/` |
+| **R5** | Redesign §5 — Stacks | 📋 Planned | — (see `design-implementation-roadmap.md`) |
 | — | Angular 17 → 21 upgrade (four major hops) | ✅ Done | `archive/2026-07-17-upgrade-angular-21/` |
 
 ## Notes
@@ -329,8 +388,14 @@ disagree.
   §2 added `recentStatuses` (the one new derivation — pure, AD-004/AD-014), the
   page's **first** component specs, and specs for two new shared components.
 - Shared components now: `<app-stat-card>` (§1), `<app-day-strip>` (§2, takes
-  `statuses` + `hex`), `<app-habit-form>` (§2, `[habit]` null = create). §2b
-  re-uses `day-strip` at a longer window; §4 still needs the heatmap primitive.
+  `statuses` + `hex`), `<app-habit-form>` (§2, `[habit]` null = create),
+  `<app-heat-grid>` (§4, `rate: number | null` per day, five-step ramp),
+  `<app-bar-chart>` (§4, highlights the max value, not "today" — AD-024). §2b
+  re-uses `day-strip` at a longer window.
+- New service derivations from §4, all pure and live (AD-004):
+  `dailyPooledRates`, `dailyDoneCounts`, `weekdayRates`, `lifetimeCounts`,
+  `activityWindowDays`.
+- Test baseline after redesign §4 (`analytics`): **339** passing (was 251).
 - **The prototype has six pages, not five.** The sixth (habit detail) is reached
   by clicking a habit's *name* on `/habits`. Roadmap §2b. See L-015.
 - Design comparison needs `DESIGN_BASE_URL` when port 4200 is taken by another

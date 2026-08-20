@@ -692,6 +692,125 @@ export class HabitService {
   }
 
   /**
+   * Pooled completion rate per day for the trailing window ending today, oldest
+   * first. Each entry is the pool's completion rate (done/countable) for that
+   * day's habits, or `null` if nothing was due on that day.
+   *
+   * The distinction between `null` and `0` is deliberate: a day on which nothing
+   * was due is not a day on which everything was missed. The analytics heatmap
+   * needs this to distinguish "no data" from "complete failure" (AD-010). Call
+   * `poolCounts(habits, iso, iso, today)` once per day to avoid restating its
+   * contract in a second place (L-001).
+   *
+   * Returns `[]` when `days <= 0`. An empty `habits` array yields all `null`.
+   */
+  dailyPooledRates(
+    habits: Habit[],
+    days: number,
+    today: Date = new Date(),
+  ): Array<number | null> {
+    if (days <= 0) {
+      return [];
+    }
+    const todayIso = HabitService.todayIso(today);
+    const result: Array<number | null> = [];
+    for (let offset = days - 1; offset >= 0; offset--) {
+      const iso = HabitService.shiftIso(todayIso, -offset);
+      const { done, countable } = this.poolCounts(habits, iso, iso, today);
+      result.push(countable === 0 ? null : done / countable);
+    }
+    return result;
+  }
+
+  /**
+   * Raw completion count per day for the trailing window ending today, oldest
+   * first. Each entry counts habits whose `completedDates` includes that day's
+   * ISO, regardless of whether the habit was due on that day.
+   *
+   * Deliberately **not** the same shape as `dailyPooledRates`: this counts
+   * *what happened* (off-schedule ticks included), while rates count *what was
+   * owed* (due-day guard enforced). The two must not be unified — they serve
+   * different purposes and feed different charts (AD-014).
+   *
+   * Returns `[]` when `days <= 0`.
+   */
+  dailyDoneCounts(
+    habits: Habit[],
+    days: number,
+    today: Date = new Date(),
+  ): number[] {
+    if (days <= 0) {
+      return [];
+    }
+    const todayIso = HabitService.todayIso(today);
+    const result: number[] = [];
+    for (let offset = days - 1; offset >= 0; offset--) {
+      const iso = HabitService.shiftIso(todayIso, -offset);
+      let count = 0;
+      for (const habit of habits) {
+        if (habit.completedDates.includes(iso)) {
+          count++;
+        }
+      }
+      result.push(count);
+    }
+    return result;
+  }
+
+  /**
+   * Pooled completion rate per weekday across all history (from earliest start
+   * date through today inclusive). Returns exactly 7 entries indexed
+   * `Sun = 0 … Sat = 6`, each the completion rate for that weekday or `null` if
+   * nothing was ever due on that weekday.
+   *
+   * The distinction between `null` and `0` is deliberate: a weekday on which
+   * nothing was ever due is not a weekday on which every due completion was
+   * missed. Accumulates `poolCounts` per day into each day's weekday bucket
+   * (Analyst §3.6).
+   *
+   * Extracts the weekday with the house split-parts construction:
+   * `const [y, m, d] = iso.split('-').map(Number); new Date(y, m - 1, d).getDay()`.
+   * Never `new Date(iso).getDay()` — that parses as UTC and shifts the weekday
+   * for half the world (AD-003, CriticReview R5).
+   *
+   * Returns seven `null`s when `habits` is empty or `earliestStartIso` is null.
+   */
+  weekdayRates(
+    habits: Habit[],
+    today: Date = new Date(),
+  ): Array<number | null> {
+    const fromIso = this.earliestStartIso(habits);
+    if (fromIso === null) {
+      return [null, null, null, null, null, null, null];
+    }
+
+    const todayIso = HabitService.todayIso(today);
+    const buckets: Array<{ done: number; countable: number }> = [
+      { done: 0, countable: 0 },
+      { done: 0, countable: 0 },
+      { done: 0, countable: 0 },
+      { done: 0, countable: 0 },
+      { done: 0, countable: 0 },
+      { done: 0, countable: 0 },
+      { done: 0, countable: 0 },
+    ];
+
+    let cursor = fromIso;
+    while (cursor <= todayIso) {
+      const [y, m, d] = cursor.split('-').map(Number);
+      const weekday = new Date(y, m - 1, d).getDay();
+
+      const { done, countable } = this.poolCounts(habits, cursor, cursor, today);
+      buckets[weekday].done += done;
+      buckets[weekday].countable += countable;
+
+      cursor = HabitService.nextIso(cursor);
+    }
+
+    return buckets.map((b) => (b.countable === 0 ? null : b.done / b.countable));
+  }
+
+  /**
    * Build a calendar month grid as an ordered array of cells (leading/trailing
    * blanks to align weekday columns), each with iso and status. Month is 0-based
    * (JS convention). Pure; year/month injectable for prev/next paging.

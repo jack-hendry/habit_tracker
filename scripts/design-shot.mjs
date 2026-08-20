@@ -70,6 +70,7 @@ const STATES = {
   ],
   habits: ['checked', 'not-due-today', 'archived', 'paused-badge'],
   dashboard: ['done', 'last-done'],
+  analytics: ['heat-0', 'heat-1', 'heat-2', 'heat-3', 'heat-4', 'bar-max', 'bar-rest', 'dow-best', 'dow-rest'],
   'habit-detail': ['cell-blank'],
 };
 

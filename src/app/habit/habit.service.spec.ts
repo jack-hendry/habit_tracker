@@ -1448,3 +1448,203 @@ describe('Service derivations: activityWindowDays, lifetimeCounts, monthToDateCo
     });
   });
 });
+
+describe('HabitService — Analytics §1 (dailyPooledRates, dailyDoneCounts, weekdayRates)', () => {
+  const FRI_17 = new Date(2026, 6, 17); // "today" = Friday 2026-07-17
+  let service: HabitService;
+
+  beforeEach(() => {
+    localStorage.clear();
+    service = new HabitService();
+  });
+
+  function habit(overrides: Partial<Habit> = {}): Habit {
+    return {
+      id: 'h',
+      name: 'H',
+      createdAt: '2026-07-13T12:00:00Z',
+      completedDates: [],
+      schedule: { type: 'daily' },
+      startDate: '2026-07-13',
+      ...overrides,
+    };
+  }
+
+  describe('dailyPooledRates', () => {
+    it('a fully-done day returns exactly 1', () => {
+      // Single daily habit, completed on a specific past day
+      // days=2, today=Wed15 means window is [Tue14, Wed15]
+      // But Wed is today (pending), so query for 3 days to include Tue as a past day
+      const h = habit({ completedDates: ['2026-07-14'] }); // completed on Tue 14
+      const result = service.dailyPooledRates([h], 3, new Date(2026, 6, 15)); // today = Wed 15
+      // Window offsets [2, 1, 0]: Mon 13 (index 0), Tue 14 (index 1), Wed 15 (index 2)
+      // Tue 14 at index 1: due, done (in completedDates) → 1/1 = 1
+      expect(result[1]).toBe(1);
+    });
+
+    it('a fully-missed day returns exactly 0', () => {
+      // Single daily habit, NOT completed on a specific past day
+      // days=3, today=Wed15 means window is [Mon13, Tue14, Wed15]
+      const h = habit({ startDate: '2026-07-14', createdAt: '2026-07-14T00:00:00Z', completedDates: [] }); // start = Tue 14, never completed
+      const result = service.dailyPooledRates([h], 3, new Date(2026, 6, 15)); // today = Wed 15
+      // Window offsets [2, 1, 0]: Mon 13 (index 0), Tue 14 (index 1), Wed 15 (index 2)
+      // Tue 14 at index 1: due (start date), not completed, past → missed → 0/1 = 0
+      expect(result[1]).toBe(0);
+    });
+
+    it('returns correctly-sized array oldest-first', () => {
+      // Habit done only on Wed 15, queried over 3 days ending Fri 17
+      // Window (offsets 2, 1, 0): Wed 15 (index 0, oldest), Thu 16, Fri 17 (index 2, today)
+      const h = habit({ completedDates: ['2026-07-15'] }); // done only Wed 15
+      const result = service.dailyPooledRates([h], 3, FRI_17);
+      expect(result.length).toBe(3);
+      expect(result[0]).toBe(1); // Wed 15: done (oldest, oldest-first ordering verified by this being first completion)
+      expect(result[1]).toBe(0); // Thu 16: missed
+      expect(result[2]).toBeNull(); // Fri 17: pending today (countable = 0 → null)
+    });
+
+    it('returns null for days with no due habits', () => {
+      // Weekdays-only habit (Mon/Wed/Fri), queried for a single Saturday
+      const h = habit({ schedule: { type: 'weekdays', days: [1, 3, 5] } }); // Mon/Wed/Fri only
+      const result = service.dailyPooledRates([h], 1, new Date(2026, 6, 19)); // today = Sun 19
+      // Window: Sat 18 (offset -1 from Sun 19, index 0)
+      // Sat 18: not due (weekdays-only, Sat is not in [1, 3, 5]) → countable = 0 → null
+      expect(result[0]).toBeNull(); // Sat: not due, so returns null not 0
+    });
+
+    it('returns empty array for days <= 0', () => {
+      const h = habit();
+      expect(service.dailyPooledRates([h], 0, FRI_17)).toEqual([]);
+      expect(service.dailyPooledRates([h], -1, FRI_17)).toEqual([]);
+    });
+
+    it('empty habits returns all nulls', () => {
+      const result = service.dailyPooledRates([], 2, FRI_17);
+      expect(result).toEqual([null, null]);
+    });
+  });
+
+  describe('dailyDoneCounts', () => {
+    it('counts a completion recorded on a day the habit was not scheduled', () => {
+      // MWF schedule but tick completed on Tue (off-schedule). dailyDoneCounts
+      // must count it (guard-free behaviour), unlike dailyPooledRates which would not.
+      const h = habit({ schedule: { type: 'weekdays', days: [1, 3, 5] }, completedDates: ['2026-07-14'] }); // Tue
+      const result = service.dailyDoneCounts([h], 1, new Date(2026, 6, 14));
+      expect(result).toEqual([1]);
+    });
+
+    it('a day with no completions returns 0', () => {
+      const h = habit({ completedDates: [] });
+      const result = service.dailyDoneCounts([h], 1, FRI_17);
+      expect(result).toEqual([0]);
+    });
+
+    it('length and oldest-first ordering', () => {
+      const h = habit({ completedDates: ['2026-07-13', '2026-07-17'] });
+      const result = service.dailyDoneCounts([h], 7, FRI_17);
+      expect(result.length).toBe(7);
+      expect(result[2]).toBe(1); // 13 Mon
+      expect(result[6]).toBe(1); // 17 Fri
+      expect(result[3]).toBe(0); // 14 Tue (completed Dates doesn't include it)
+    });
+
+    it('days = 0 returns empty array', () => {
+      const h = habit();
+      expect(service.dailyDoneCounts([h], 0, FRI_17)).toEqual([]);
+    });
+
+    it('counts across multiple habits', () => {
+      const a = habit({ id: 'a', completedDates: ['2026-07-17'] });
+      const b = habit({ id: 'b', completedDates: ['2026-07-17'] });
+      const c = habit({ id: 'c', completedDates: [] });
+      const result = service.dailyDoneCounts([a, b, c], 1, FRI_17);
+      expect(result).toEqual([2]); // 2 habits completed on Fri 17
+    });
+
+    it('guard-free: counts off-schedule completions in the same result as on-schedule', () => {
+      // This test would FAIL if someone added an isDueOn guard (which would be wrong).
+      // Habit is daily, completed on every day, but test counts even if we change
+      // our mind and make it weekdays-only.
+      const h = habit({ completedDates: ['2026-07-13', '2026-07-14', '2026-07-15'] });
+      const result = service.dailyDoneCounts([h], 3, new Date(2026, 6, 15));
+      expect(result).toEqual([1, 1, 1]);
+
+      // Now change to weekdays-only: 13=Mon, 14=Tue, 15=Wed. Tue (14) is not due.
+      // dailyDoneCounts still counts it because there's no guard.
+      const weekdaysH = habit({ completedDates: ['2026-07-13', '2026-07-14', '2026-07-15'], schedule: { type: 'weekdays', days: [1, 3, 5] } });
+      const weekdaysResult = service.dailyDoneCounts([weekdaysH], 3, new Date(2026, 6, 15));
+      expect(weekdaysResult).toEqual([1, 1, 1]); // Still counts all three, including Tue
+    });
+  });
+
+  describe('weekdayRates', () => {
+    it('a weekdays-only habit yields null for Sat and Sun, not 0', () => {
+      // Weekdays-only habit from Mon 13 onwards, but only with Fri as a completed day
+      const h = habit({ startDate: '2026-07-13', schedule: { type: 'weekdays', days: [1, 3, 5] }, completedDates: ['2026-07-13'] }); // Mon done
+      const result = service.weekdayRates([h], FRI_17);
+      expect(result.length).toBe(7);
+      expect(result[0]).toBeNull(); // Sun: never due → null
+      expect(result[6]).toBeNull(); // Sat: never due → null
+      expect(result[1]).toBe(1); // Mon: due on 13, done → 1/1 = 1
+      expect(result[3]).toBe(0); // Wed: due on 15, not done → 0/1 = 0
+      // Fri 17 is pending, so countable=0 on Fri, giving null for Fri bucket
+      expect(result[5]).toBeNull(); // Fri: due on 17 (today/pending so countable=0)
+    });
+
+    it('a habit done every Friday and missed every Monday yields 1 at index 5 and 0 at index 1', () => {
+      // Create a habit starting Mon 13, completed only on Fri 17, for a window spanning all weekdays.
+      // Mon 13, 20 → missed (not completed)
+      // Fri 17 → done
+      const h = habit({ schedule: { type: 'weekdays', days: [1, 5] }, completedDates: ['2026-07-17'] }); // Mon and Fri, but only Fri 17 done
+      const result = service.weekdayRates([h], FRI_17);
+      expect(result[1]).toBe(0); // Mon: due but not done (missed) → 0
+      expect(result[5]).toBe(1); // Fri: due and done → 1
+    });
+
+    it('empty input yields seven nulls', () => {
+      const result = service.weekdayRates([], FRI_17);
+      expect(result).toEqual([null, null, null, null, null, null, null]);
+    });
+
+    it('the returned array always has length 7', () => {
+      const h = habit();
+      const result = service.weekdayRates([h], FRI_17);
+      expect(result.length).toBe(7);
+    });
+
+    it('weekday extraction uses split-parts construction, not new Date(iso).getDay()', () => {
+      // This test documents the use of the house construction to avoid UTC parsing issues.
+      // Create a habit with specific dates and verify weekday bucket placement is correct.
+      // 2026-07-13 = Monday (ISO), 2026-07-14 = Tuesday, ..., 2026-07-19 = Sunday
+      // Manually create completions for specific dates and check they fall into the right buckets.
+      const h = habit({
+        startDate: '2026-07-13',
+        completedDates: ['2026-07-13', '2026-07-19'], // Mon and Sun
+      });
+      const result = service.weekdayRates([h], new Date(2026, 6, 19)); // today = Sun 19
+      // Mon 13: 1/1 (due, done) → 1.0
+      // Sun 19: 1/1 (due, done) → 1.0
+      // Other weekdays: not due or scheduled elsewhere
+      expect(result[1]).toBe(1); // Mon index
+      expect(result[0]).toBe(1); // Sun index
+    });
+
+    it('accumulates poolCounts across all history', () => {
+      // Start with 2 habits on Mon 13, through Fri 17.
+      // Mon 13: a done, b done → 2/2
+      // Tue 14: a done, b missed → 1/2
+      // Fri 17: a done, b not done → 1/1 (b is pending today, not countable)
+      // So Mon→Tue have partial rates, Fri is perfect.
+      const a = habit({ id: 'a', completedDates: ['2026-07-13', '2026-07-14', '2026-07-15', '2026-07-16', '2026-07-17'] });
+      const b = habit({ id: 'b', completedDates: ['2026-07-13'] });
+      const result = service.weekdayRates([a, b], FRI_17);
+
+      // Mon (1): 13 and 20 would have been due, but window is only 13-17, so just 13
+      // 13 = Mon, both a and b done → 2/2 = 1.0
+      expect(result[1]).toBe(1);
+
+      // Tue (2): 14 is a Tue, a done, b not done → 1/2 = 0.5
+      expect(result[2]).toBeCloseTo(0.5, 5);
+    });
+  });
+});

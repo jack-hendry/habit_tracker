@@ -338,3 +338,38 @@ run unusable, a loosened one re-opens the gap with no symptom. It earned its
 keep during development by catching a false positive nobody would have
 predicted — `<<<` contains a `<<` pair, so every herestring read was being
 denied until the pattern grew a leading `[^<]` guard.
+
+**L-029 — A verification step's mechanism must be checked against what it's
+checking, not assumed to see it.** (`analytics` CriticReview R8) Step 12 was
+written to add a `data-state`-style attribute to heatmap cells and bars, then
+rely on `design-shot.mjs`'s `reportStateCoverage` to count how many declared
+states actually rendered. But `reportStateCoverage` counts via
+`document.getElementsByClassName`, so a `data-state` attribute is invisible
+to it — the step could not have done its job as planned, and nothing about
+reading the plan would have surfaced that; only opening `design-shot.mjs`
+did. Fixed by moving the state-marking into the steps that already own the
+markup (plain CSS classes: `heat-0…heat-4`, `bar-max`/`bar-rest`,
+`dow-best`/`dow-rest`), so Step 12 shrank to registering the page in
+`STATES`.
+
+Sibling of L-026: a screenshot only checks the states its seed renders, and a
+coverage *counter* only counts the signal its own scan actually reads — both
+failure modes are silent unless you read the tool doing the checking, not the
+plan describing it.
+
+**L-030 — A mutation check against already-sorted data can pass with the
+comparator deleted.** (found during `analytics`'s harden-round verification)
+`Array.prototype.sort()` is stable in every JS engine this app targets, so
+deleting a comparator's tie-break clause and re-running a sort-dependent spec
+against the demo seed produced no failure — the seed's pre-sort order already
+matched the order the comparator was supposed to enforce, so "keep original
+order on a tie" held whether or not the code that enforces it still existed.
+The mutation only surfaced once the fixture was rewritten so the tied
+elements' pre-sort order disagreed with the intended tie order.
+
+A mutation-checked test is only as strong as its fixture's ability to
+disagree with the default behaviour the mutation falls back to — stability,
+insertion order, and object-key iteration order are the usual culprits,
+because they are consistent enough to look intentional. Before trusting a
+mutation kill on a comparator or reducer, check whether the fixture's
+pre-operation order already matches the post-operation order it's asserting.

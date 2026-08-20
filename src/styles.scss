@@ -106,6 +106,19 @@
   --cal-future: #8f95e8;
   --cal-future-bg: #e7eaff;
   --cal-future-text: #4338ca;
+
+  /* Analytics §4 — chart palette (roadmap §4). --heat-4 and --bar-max are
+     --accent by identity, not coincidence; both are the heatmap's topmost step
+     and the bar chart's highlight colour. Sampled from the prototype
+     (lines 179–246, 453–474). */
+  --heat-0: #ebedf0;
+  --heat-1: #c7dcf1;
+  --heat-2: #7fb0de;
+  --heat-3: #3c87cd;
+  --heat-4: var(--accent);
+  --bar-max: var(--accent);
+  --bar-rest: #bdd6ee;
+  --bar-label: #9aa0a8;
 }
 
 /* `margin: 0` makes the sticky bar genuinely full-bleed; the background is on
