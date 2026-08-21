@@ -307,7 +307,41 @@ Flagged for the critic: this is invented, not transcribed.
 
 ## 6. Retrospective
 
-_To be filled in before archiving._
+**Did Analyst.md catch anything not thought about up front?**
 
-- Did Analyst.md catch anything not thought about up front?
-- Did anything in tasks.md turn out to be wrong during coding? What?
+Yes — §0 found eight points where the roadmap's prose disagreed with the
+prototype source, three of them in the data model: `@angular/cdk` is not
+installed and never was (the roadmap named it as the drag-and-drop mechanism);
+`aglyph` was omitted from the feature description entirely; and the done-label
+denominator is **members due today**, not total members. None of the eight
+would surface in a static screenshot, and all were settled before any code was
+written. §3.6 also flagged the zero-stacks empty state as invented — it has no
+prototype equivalent — so it went to the critic rather than being built on a
+guess.
+
+The general lesson is that the roadmap is prose and prose drifts: re-derive from
+the prototype source before each section, never from the roadmap's summary of it.
+
+**Did anything in tasks.md turn out to be wrong during coding?**
+
+Yes, in three ways, all recorded in full under "What changed from the plan" in
+`tasks.md`:
+
+1. **A reference value was wrong and shipped wrong.** The Reference-values block
+   specified a due row's NOT-TODAY chip as `padding 0; background transparent`.
+   Implemented as a descendant selector across two *sibling* classes, it matched
+   nothing, and its declarations were inverted regardless. Dead code that read as
+   coverage until Step 16 (L-033, L-034).
+
+2. **The plan's assumptions went stale mid-run.** The user approved a day-proof
+   demo seed after Step 7; the remaining steps still carried Step 2's original
+   expectation, turning an expected absence into a failure condition (L-037).
+
+3. **Acceptance criterion 2 was over-specified.** Its literal `"2 of 2 done
+   today"` and the chip's placement were transcribed from the prototype's capture
+   day, so a correct build fails the criterion as written on most weekdays
+   (L-032).
+
+The step *structure* held — 17 sequential steps, three checkpoints, every step
+ending green, 339 → 404 tests. What did not hold was the prose inside the steps,
+which is where every defect above lived.

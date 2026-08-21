@@ -1,0 +1,77 @@
+<div class="edit-form">
+  <label class="edit-field">
+    <span class="edit-label">Name</span>
+    <input
+      type="text"
+      [ngModel]="draftName()"
+      (ngModelChange)="draftName.set($event)"
+      class="stack-input"
+    />
+  </label>
+
+  <label class="edit-field">
+    <span class="edit-label">Time</span>
+    <input
+      type="text"
+      [ngModel]="draftTime()"
+      (ngModelChange)="draftTime.set($event)"
+      placeholder="e.g. anytime"
+      class="stack-input"
+    />
+  </label>
+
+  <label class="edit-field">
+    <span class="edit-label">Anchor</span>
+    <input
+      type="text"
+      [ngModel]="draftAnchor()"
+      (ngModelChange)="draftAnchor.set($event)"
+      placeholder="e.g. I pour my morning coffee"
+      class="stack-input"
+    />
+  </label>
+
+  <div class="edit-field">
+    <span class="edit-label">Glyph</span>
+    <div class="icon-picker">
+      @for (i of icons; track i.id) {
+        <button
+          type="button"
+          class="icon-option"
+          [class.selected]="draftAglyph() === i.id"
+          [attr.aria-label]="i.label"
+          [attr.aria-pressed]="draftAglyph() === i.id"
+          [title]="i.label"
+          (click)="draftAglyph.set(i.id)"
+        >
+          {{ i.glyph }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <div class="edit-field">
+    <span class="edit-label">Colour</span>
+    <div class="swatch-picker">
+      @for (c of colors; track c.id) {
+        <button
+          type="button"
+          class="swatch"
+          [class.selected]="draftColor() === c.id"
+          [style.background-color]="c.hex"
+          [attr.aria-label]="c.label"
+          [attr.aria-pressed]="draftColor() === c.id"
+          [title]="c.label"
+          (click)="draftColor.set(c.id)"
+        ></button>
+      }
+    </div>
+  </div>
+
+  <div class="edit-actions">
+    <button (click)="onSave()" [disabled]="!canSave()" class="save-button">
+      Save
+    </button>
+    <button (click)="cancel.emit()" class="cancel-button">Cancel</button>
+  </div>
+</div>

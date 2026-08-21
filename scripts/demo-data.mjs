@@ -1,9 +1,11 @@
 // Deterministic demo habits for screenshots and manual poking.
 //
-// Reproduces the six habits and ~18 weeks of history from the Claude Design
+// Reproduces the seven habits and ~18 weeks of history from the Claude Design
 // prototype ("Habit Tracker Prototype.dc.html"), including its seeded LCG, so
 // `design/actual/*.png` shows the same *kind* of data as `design/target/*.png`
-// instead of an empty store.
+// instead of an empty store. The seventh habit (demo-journal) is a local addition.
+// It is not in the prototype and exists only to ensure the stacks page renders
+// all data-dependent states on every day of the week.
 //
 // Tooling only — this file is never imported by anything under `src/`. The app
 // bundle must not carry fixtures.
@@ -12,6 +14,7 @@
 //   npm run design:shot -- dashboard --seed
 
 export const STORAGE_KEY = 'habit_tracker.habits.v1';
+export const STACKS_STORAGE_KEY = 'habit_tracker.stacks.v1';
 
 /** Days of history generated, index 0 = oldest, index DAYS-1 = today. */
 const DAYS = 126;
@@ -27,6 +30,7 @@ const DEFS = [
   { key: 'water',    name: 'Drink 2L water',    icon: 'water',    color: 'teal',    category: 'Health', schedule: { type: 'daily' },                        p: 0.88 }, // #14b8a6
   { key: 'ship',     name: 'Ship side project', icon: 'code',     color: 'orange',  category: 'Work',   schedule: { type: 'weekdays', days: [1, 2, 3, 4, 5] }, p: 0.64 }, // #f97316
   { key: 'sleep',    name: 'Sleep by 11pm',     icon: 'sleep',    color: 'slate',   category: 'Health', schedule: { type: 'daily' },                        p: 0.56 }, // #64748b
+  { key: 'journal',  name: 'Weekend journal',   icon: 'heart',    color: 'rose',    category: 'Mind',   schedule: { type: 'weekdays', days: [0, 6] },       p: 0.72 }, // #f43f5e
 ];
 
 // Which habits are already ticked *today*, so the TODAY card reads "3 of 5
@@ -54,7 +58,7 @@ function isDue(def, weekday) {
 }
 
 /**
- * Build the six demo habits, in the app's own `Habit` shape, ending today.
+ * Build the seven demo habits, in the app's own `Habit` shape, ending today.
  * Deterministic: same day in, same history out.
  */
 export function buildDemoHabits(today = new Date()) {
@@ -110,4 +114,46 @@ export function buildDemoHabits(today = new Date()) {
     startDate,
     status: 'active',
   }));
+}
+
+/**
+ * The prototype's two stacks. Morning kickstart holds meditate/run/water;
+ * Evening wind-down holds read/sleep/journal; ship is left unstacked.
+ *
+ * `demo-journal` is NOT in the prototype and is not in design/target/stacks.png.
+ * It exists so the page's `stack-item-not-due` state renders on every day of
+ * the week: it is weekend-only [0,6], so Mon-Fri it is the not-due member,
+ * and Sat/Sun demo-run ([1,3,5]) is. Without it the seeded shot renders a
+ * not-due row only on Tue/Thu/Sat/Sun, and on the other three days that state
+ * is verified by nothing. The cost is one extra row in the evening card that
+ * the target PNG does not have. Do not remove it to make the composite match.
+ *
+ * The done label is weekday-dependent and that is correct, not a bug:
+ * demo-run is weekdays [1,3,5], so on Tue/Thu/Sat/Sun it is not due and the
+ * Morning label reads "2 of 2 done today", while on Mon/Wed/Fri it is due and
+ * the label reads "2 of 3". Do not "fix" the denominator to make it read 2 of 2.
+ *
+ * Palette ids, not raw hex/emoji — see AD-029.
+ */
+export function buildDemoStacks() {
+  return [
+    {
+      id: 'demo-stack-morning',
+      name: 'Morning kickstart',
+      time: '7:00 AM',
+      anchor: 'I pour my morning coffee',
+      aglyph: 'coffee',
+      color: 'amber',
+      habitIds: ['demo-meditate', 'demo-run', 'demo-water'],
+    },
+    {
+      id: 'demo-stack-evening',
+      name: 'Evening wind-down',
+      time: '9:30 PM',
+      anchor: 'I close my work laptop',
+      aglyph: 'moon',
+      color: 'indigo',
+      habitIds: ['demo-read', 'demo-sleep', 'demo-journal'],
+    },
+  ];
 }

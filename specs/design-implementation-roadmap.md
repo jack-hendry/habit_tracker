@@ -294,47 +294,69 @@ the current build. Gaps caught vs screenshot:
 
 ## 5 — Stacks (NEW PAGE)
 
-**Current state.** Does not exist. No route, no component, no data model.
+> ✅ **Built** (2026-08-21) — spec in `specs/archive/2026-08-21-stacks/`,
+> decisions AD-028…AD-032 and blocker B-003. The section's prose was wrong on
+> eight points, three of which touched the data model: `@angular/cdk` does not
+> exist (the page uses native HTML5 DnD, AD-028); the prototype has no rename/time/anchor
+> editor (only create-with-defaults, AD-032 adds inline edit); and `aglyph` was
+> completely omitted from the feature description. The palette gains indigo,
+> coffee, moon, and clock (AD-029). The **done label denominator is "due today",
+> not total members** — when a habit is not due today, it does not count toward
+> the M in "N of M done". The habit name is a link to `/habits/:id`. An inline
+> chip-picker gates the `+ Add habit` footer. A habit belongs to **at most one
+> stack** (AD-030), and deletion prunes ids immediately while archiving hides the
+> row and leaves membership unchanged (AD-031). Drag-drop is mouse-only with no
+> keyboard reordering (B-003). The Analyst's close reading of the proto caught
+> all eight and more before any code was written; none would surface in a static
+> screenshot.
 
-**UI changes (all new).**
+**Current state.** Built — route `/stacks`, `StacksComponent`, `Stack` data
+model, full CRUD + drag-and-drop. 404 tests passing.
+
+**UI changes (all new).** ✅ Matches all mockup details:
 - Header: `Habit Stacks` + subtitle
   (`"After [current habit], I will [new habit]" — chain habits to an anchor…`) +
   a **`+ New stack`** button.
-- **Stack cards** (two side by side in the mockup):
-  - Title + time badge (`7:00 AM`) + `2 of 2 done today` progress badge.
-  - **Anchor row** — `ANCHOR · AFTER` + free-text trigger
-    (`I pour my morning coffee`), tinted to the stack's color.
+- **Stack cards**:
+  - Title + time badge + `N of M done today` progress badge (M = members due today).
+  - **Anchor row** — `ANCHOR · AFTER` + free-text trigger, tinted to the stack's color.
   - `THEN` connectors between rows.
-  - Habit rows with a **drag handle**, check state, streak `92 🔥`, a `NOT TODAY`
-    chip where relevant, and a **remove (×)**.
-  - `+ Add habit to this stack` footer.
-- **Unstacked tray** — chips for habits not in any stack, draggable onto a stack.
+  - Habit rows with a **drag handle**, check state (disabled if not due today),
+    streak, `NOT TODAY` chip, and a **remove (×)**.
+  - Inline **edit** and **delete** buttons in the card header.
+  - `+ Add habit to this stack` footer (also a drop target).
+- **Unstacked tray** — chips for habits in no stack, draggable onto a stack.
+- **Empty state** — when no stacks exist, a dashed card explaining the feature
+  + `+ New stack` button.
 
-**New features (all new).**
-- New **data model**: `Stack { id, name, time, color, anchorText, habitIds[] }`,
-  persisted to localStorage alongside habits.
+**New features (all new).** ✅ All implemented:
+- New **data model**: `Stack { id, name, time, anchor, aglyph, color, habitIds[] }`,
+  persisted to `habit_tracker.stacks.v1`.
 - Route `/stacks` + `StacksComponent`.
-- **Drag-and-drop**: reorder habits within a stack, and drag an unstacked chip
-  into a stack (Angular CDK `DragDrop`).
-- Per-stack **today progress** (`N of M done`) derived from member habits'
-  done-today state.
-- Stack CRUD (create/rename/set time/set anchor/delete) + add/remove habit.
+- **Native HTML5 drag-and-drop** (AD-028): reorder habits within a stack, move
+  between stacks, drag from Unstacked tray onto a stack.
+- Per-stack **today progress** (N of M done, where M = members due today, AD-031).
+- **Inline editor** for stack metadata (name, time, anchor, aglyph, color) — no
+  modal, follows `HabitFormComponent` pattern (AD-032).
+- Stack CRUD: create, update (inline), delete. Habit membership: add, remove, reorder.
+- **Referential integrity** — a deleted habit is pruned from every stack
+  immediately; archiving hides it but preserves its position (AD-031).
+- **One-stack limit** — a habit belongs to at most one stack; adding to stack B
+  removes it from stack A (AD-030).
 
-**Critic Review.** ✅ Card anatomy, anchor, connectors, tray all captured. Gaps
-caught vs screenshot:
-- **This is the largest new build** — a new persisted entity plus drag-and-drop,
-  not just a view. It's genuinely Complex (new domain the project has never had).
-  Do **not** size it with the other pages.
-- The **anchor is free text** ("I pour my morning coffee"), i.e. a trigger the
-  user types, *not* another habit — the model needs an `anchorText`, not an
-  `anchorHabitId`. Flagged (reflected in the model above).
-- Each stack has its **own color + time** (orange 7:00 AM, indigo 9:30 PM) that
-  tint the whole card — store on the stack, don't derive from members. Flagged.
-- Habit rows inside a stack still show **streak and NOT-TODAY state** — they read
-  live habit data, so a stack row is a *reference* to a habit, never a copy.
-  Flagged.
-- The **unstacked tray** implies a habit can belong to at most one stack — decide
-  and document that constraint before building drag-and-drop.
+**Critic Review.** ✅ Card anatomy, anchor tint, THEN connectors, NOT TODAY chip
+position, `0 🔥` streak on overdue habits, "2 of 2 done today" (only the member
+due that day), one Unstacked chip, and the full-width empty state all match the
+mockup exactly (design check with all five declared states rendered every day).
+Design conformance assertions in `stacks.design.spec.ts` transcribed from the
+proto source, not the SCSS (L-022). The two harden rounds found CSS bugs
+invisible to every check (L-033/L-034), a fixture state coverage bug (L-031),
+and over-specified acceptance criteria (L-032). **Two blind spots remain and
+overlap exactly**: `design-shot.mjs` captures at dpr 1 against a dpr-2 target
+and downscales both halves, so the composite cannot resolve sub-2px detail
+(L-035); and ChromeHeadless rounds `border-width: 1.5px` to `'1px'`, so the spec
+cannot assert it either (L-036). The anchor box's 1.5px dashed border is
+therefore verified by nothing.
 
 ---
 

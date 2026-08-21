@@ -116,6 +116,7 @@ export const HABIT_COLORS: readonly HabitColor[] = [
   { id: 'violet', label: 'Violet', hex: '#8b5cf6' },
   { id: 'teal', label: 'Teal', hex: '#14b8a6' },
   { id: 'orange', label: 'Orange', hex: '#f97316' },
+  { id: 'indigo', label: 'Indigo', hex: '#6366f1' },
 ];
 
 /** Fixed icon set. First entry is the default (used for no icon / unknown id). */
@@ -132,6 +133,9 @@ export const HABIT_ICONS: readonly HabitIcon[] = [
   { id: 'money', label: 'Money', glyph: '💰' },
   { id: 'clean', label: 'Chores', glyph: '🧹' },
   { id: 'heart', label: 'Health', glyph: '❤️' },
+  { id: 'coffee', label: 'Coffee', glyph: '☕' },
+  { id: 'moon', label: 'Night', glyph: '🌙' },
+  { id: 'clock', label: 'Time', glyph: '⏰' },
 ];
 
 /**

@@ -1,4 +1,95 @@
 <div class="page-container">
-  <h1>Habit Stacks</h1>
-  <p class="placeholder">Chaining habits into ordered, reorderable stacks lands in roadmap §5.</p>
+  <div class="header-row">
+    <div>
+      <h1>Habit Stacks</h1>
+      <p class="subtitle">
+        After [current habit], I will [new habit] — chain habits to an anchor you already do. Drag ⠿ to reorder.
+      </p>
+    </div>
+    <button class="new-stack-btn" (click)="newStack()">+ New stack</button>
+  </div>
+
+  @if (cards().length === 0) {
+    <div class="stacks-empty">
+      <div class="empty-card">
+        <div class="empty-text">Stack habits onto something you already do: "After I pour my morning coffee, I will meditate."</div>
+        <button class="empty-new-stack-btn" (click)="newStack()">+ New stack</button>
+      </div>
+    </div>
+  } @else {
+    <div class="cards">
+      @for (card of cards(); track card.stack.id) {
+        <div class="stack-card" [style.border-top-color]="card.hex">
+          <div class="card-header">
+            <div class="stack-name">{{ card.stack.name }}</div>
+            <div class="time-pill">{{ card.stack.time }}</div>
+            <span class="spacer"></span>
+            <div class="done-pill">{{ card.doneLabel }}</div>
+            <button class="icon-btn edit-btn" (click)="startEdit(card.stack.id)" [title]="'Edit ' + card.stack.name">✎</button>
+            <button class="icon-btn delete-btn" (click)="deleteStack(card.stack.id)" [title]="'Delete ' + card.stack.name">🗑</button>
+          </div>
+
+          @if (editing() === card.stack.id) {
+            <app-stack-form
+              [stack]="card.stack"
+              (save)="saveEdit(card.stack.id, $event)"
+              (cancel)="cancelEdit()"
+            ></app-stack-form>
+          } @else {
+            <div class="anchor-box" [style.border-color]="card.hex" [style.background]="card.tint">
+              <div class="anchor-glyph">{{ card.aglyph }}</div>
+              <div class="anchor-column">
+                <div class="anchor-label" [style.color]="card.hex">Anchor · After</div>
+                <div class="anchor-text">{{ card.stack.anchor }}</div>
+              </div>
+            </div>
+
+            @for (item of card.items; track item.habit.id; let i = $index) {
+            <div class="then-wrapper">
+              <i></i>
+              <span>then</span>
+              <i></i>
+            </div>
+            <div class="item-row" draggable="true" (dragstart)="onDragStart(item.habit.id, card.stack.id)" (dragover)="onDragOver($event)" (drop)="onDrop($event, card.stack.id, i)">
+              <div class="handle">⠿</div>
+              <div class="check-circle" (click)="toggle(item)" [style.cursor]="item.dueToday ? 'pointer' : 'not-allowed'" [style.borderColor]="item.done ? item.hex : '#c9cdd2'" [style.backgroundColor]="item.done ? item.hex : '#fff'" [class.stack-item-done]="item.done" [class.stack-item-todo]="!item.done" [class.stack-item-not-due]="!item.dueToday">{{ item.done ? '✓' : '' }}</div>
+              <div class="habit-glyph">{{ item.glyph }}</div>
+              <a [routerLink]="['/habits', item.habit.id]" draggable="false" class="habit-name">{{ item.habit.name }}</a>
+              @if (!item.dueToday) {
+                <div class="not-today-chip">NOT TODAY</div>
+              }
+              <div class="streak stack-streak">{{ item.streak }} 🔥</div>
+              <div class="remove-btn" (click)="removeFromStack(card.stack.id, item.habit.id)">✕</div>
+            </div>
+          }
+
+            @if (adding() === card.stack.id) {
+              <div class="picker-row">
+                <div class="add-label">Add:</div>
+                @for (habit of unstacked(); track habit.id) {
+                  <div class="add-chip" (click)="pick(card.stack.id, habit.id)">{{ habit.name }}</div>
+                }
+                @if (unstacked().length === 0) {
+                  <div class="add-empty">every habit is already in a stack</div>
+                }
+              </div>
+            }
+
+            <div class="add-footer" (click)="toggleAdding(card.stack.id)" (dragover)="onDragOver($event)" (drop)="onDrop($event, card.stack.id, 99)">+ Add habit to this stack</div>
+          }
+        </div>
+      }
+    </div>
+
+    <div class="unstacked">
+      <div class="unst-label">Unstacked</div>
+      @if (unstacked().length === 0) {
+        <div class="unst-empty">all habits are stacked</div>
+      }
+      @for (habit of unstacked(); track habit.id) {
+        <div class="unstacked-chip" draggable="true" (dragstart)="onDragStart(habit.id, null)">{{ habit.name }}</div>
+      }
+      <div class="unst-hint">drag a chip onto a stack, or use "+ Add habit"</div>
+    </div>
+  }
 </div>

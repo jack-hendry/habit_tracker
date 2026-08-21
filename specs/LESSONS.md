@@ -373,3 +373,89 @@ insertion order, and object-key iteration order are the usual culprits,
 because they are consistent enough to look intentional. Before trusting a
 mutation kill on a comparator or reducer, check whether the fixture's
 pre-operation order already matches the post-operation order it's asserting.
+
+**L-031 — A design check whose state coverage depends on the weekday is a
+defective gate.** (2026-08-21, `stacks` Step 16) The stacks design check
+declares five data-dependent states, one of them `stack-item-not-due`. The only
+seeded habit that could produce it, `demo-run`, is scheduled Mon/Wed/Fri — so on
+exactly those days it *is* due, nothing renders as not-due, and the shot reports
+`4 of 5 ... NOT RENDERED: stack-item-not-due`. On the other four days it reports
+`5 of 5`. Same code, same seed, different verdict depending on the calendar.
+That is not a gate: whichever day the check happens to run, half the time the
+not-due styling is verified by nothing and the composite looks equally correct
+whether its values are right or wrong. The fix is to make the seed day-proof —
+a `demo-journal` habit scheduled `weekdays: [0, 6]` (weekend only) means that
+Mon–Fri the journal is not due and Sat/Sun `demo-run` is not due, so some member
+is always not-due. **Whenever a declared state depends on seed data, check
+whether the seed can produce it on every day of the week, not just today's.**
+
+**L-032 — A spec whose name claims more than its assertions check.**
+(2026-08-21, `stacks` Steps 9, 13 and 15; the same shape as L-024/L-029) Three
+times in this one feature, an `it(...)` name described a two-part guarantee and
+the body asserted only one part — the other half stayed green no matter what the
+code did. A name is the only thing most readers ever check, so an over-claiming
+name is worse than a missing test: it marks the ground as covered. The cure that
+caught all three is cheap and mechanical: **falsify the fixture on purpose.**
+Break the exact condition the name claims to check, run the spec, and read the
+failure message. If it still passes — or fails for some unrelated reason — the
+name is lying. Restore, confirm green, and keep the experiment's result in the
+spec's comment so the next reader does not have to repeat it.
+
+**L-033 — A descendant selector written against a sibling class is dead and
+invisible to every gate.** (2026-08-21, `stacks` Step 16)
+`.stack-item-not-due .not-today-chip` was styled but could never match:
+`.stack-item-not-due` sits on `.check-circle`, and `.not-today-chip` is that
+circle's **sibling** in the flex row, not its descendant. The rule was also
+inverted — it applied due-row values under a not-due selector — so even had it
+matched it would have been wrong. Nothing could see it: SCSS compiles a dead
+selector without complaint, no unit test asserts a rule that never fires, and
+the design composite cannot tell a missing style from a correct one. Deleting it
+changed no test result. **A selector is a claim about the DOM's shape; check it
+against the template, because no tool will.**
+
+**L-034 — An orphaned SCSS rule marks an element the template forgot to
+render.** (2026-08-21, `stacks` Step 16) `.unst-label` was fully styled but no
+element in `stacks.component.html` carried the class, so the UNSTACKED label
+present in the mockup was simply absent from the page. The orphan is the
+evidence: someone wrote the style from the design, then the markup drifted. The
+cheap general check is to list class names defined in a component's SCSS,
+subtract the ones appearing in its template, and look at what is left — every
+survivor is either dead code (L-033) or a missing element (this one). Only
+reading the mockup against the markup found this; no automated gate did.
+
+**L-035 — The design-shot composite's resolution caps what can be verified
+visually.** (2026-08-21, `stacks` Step 16) `scripts/design-shot.mjs` captures at
+dpr 1 (no `deviceScaleFactor` on `browser.newPage`) while the committed
+`design/target/*.png` are dpr 2, and the composite downscales both halves to fit
+side by side — the stacks composite is **1056×349 for a 1440px page**. Every
+sub-2px detail is therefore unresolvable in it: the 1.5px dashed anchor border,
+the 10px NOT TODAY chip, the 9.5px anchor label. This is the same blind-spot
+family as L-026 — the artefact looks equally correct whether those values are
+right or wrong — and it is how three real defects (L-033, L-034, and a
+`.done-pill` missing its padding and radius) survived a design check that
+reported success. **Treat "the composite looks right" as evidence about layout
+only.** For anything finer, crop both images at native resolution and read them,
+or assert the value in a `*.design.spec.ts`.
+
+**L-036 — `getComputedStyle` in ChromeHeadless at dpr 1 rounds fractional
+border widths.** (2026-08-21, `stacks` design check fixture) The anchor box is
+styled `border-width: 1.5px`, but `getComputedStyle` reports `'1px'` in the test
+environment. The `stacks.design.spec.ts` workaround: accept both `['1px','1.5px']`
+instead of asserting the exact fractional value. Consequence: the 1.5px border
+is verified by **nothing** in this environment. The spec cannot assert it, and
+per L-035 the composite is too coarse to show it either — the two blind spots
+overlap exactly on this value. Record that in the spec's comment so a future
+reader does not read the accepted pair as coverage.
+
+**L-037 — `tasks.md` prose goes stale when an approved mid-run change
+invalidates a step's stated expectation.** (2026-08-21, `stacks` Step 16)
+Step 16's text told its executor that `stack-item-not-due` appearing under
+`NOT RENDERED` was expected on Mon/Wed/Fri. That was true when the step was
+written. It stopped being true mid-run, when the day-proof seed of L-031 was
+approved and landed: from that point a missing not-due state was a **failure**
+condition, and a step following its own prose would have accepted the very
+defect the fix existed to remove. Stale prose is more dangerous than a stale
+value because it reads as reasoning and an executor defers to it. **When a
+mid-run change invalidates an assumption, grep the remaining steps for that
+assumption and correct them before dispatching — or state the correction in the
+step's brief, which is what happened here.**

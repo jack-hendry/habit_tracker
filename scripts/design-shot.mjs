@@ -10,7 +10,7 @@
 //   design/compare/<name>.png  — target | actual, side by side (only if a target exists)
 
 import { chromium } from 'playwright';
-import { buildDemoHabits, STORAGE_KEY } from './demo-data.mjs';
+import { buildDemoHabits, buildDemoStacks, STORAGE_KEY, STACKS_STORAGE_KEY } from './demo-data.mjs';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -72,6 +72,7 @@ const STATES = {
   dashboard: ['done', 'last-done'],
   analytics: ['heat-0', 'heat-1', 'heat-2', 'heat-3', 'heat-4', 'bar-max', 'bar-rest', 'dow-best', 'dow-rest'],
   'habit-detail': ['cell-blank'],
+  stacks: ['stack-item-done', 'stack-item-todo', 'stack-item-not-due', 'stack-streak', 'unstacked-chip'],
 };
 
 function parseArgs(argv) {
@@ -193,6 +194,12 @@ async function main() {
         [STORAGE_KEY, habits],
       );
       console.log(`seeded:  ${JSON.parse(habits).length} demo habits, ~18 weeks of history`);
+      const stacks = JSON.stringify(buildDemoStacks());
+      await page.addInitScript(
+        ([key, value]) => window.localStorage.setItem(key, value),
+        [STACKS_STORAGE_KEY, stacks],
+      );
+      console.log(`seeded:  2 demo stacks`);
     }
 
     await page.goto(`${BASE_URL}${args.route}`, { waitUntil: 'networkidle' });

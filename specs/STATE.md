@@ -282,11 +282,64 @@ accent, doing its job as the strongest signal on the page" — and aliasing
 says so in the token itself instead of leaving two literals that happen to
 agree today and can silently drift apart in a future edit.
 
+**AD-028 — Native HTML5 drag-and-drop, not Angular CDK.**
+(2026-08-21, `stacks` §3.1) Stack reordering within and between cards is
+implemented with native `draggable` attributes and `dragstart`/`dragover`/`drop`
+event listeners, not `@angular/cdk/drag-drop`. The prototype uses the same
+native APIs; `@angular/cdk` is not a project dependency and adding it for one
+page is a cost the source does not pay. Transient drag state lives in the
+component (`{ from: string | null; habitId: string }`) and is never persisted.
+
+**AD-029 — Stack colour/glyph are palette ids; the palette gains indigo,
+coffee, moon, clock.** (2026-08-21, `stacks` §3.2) `Stack.color` and
+`Stack.aglyph` store `HABIT_COLORS` and `HABIT_ICONS` ids, never raw hex or
+emoji, matching the project invariant that `Habit.color` and `Habit.icon`
+follow (AD-004 at the service level, habitat-metadata R9). Two prototype
+values fall outside the existing palette: `#6366f1` (indigo) and the three
+emoji ☕ / 🌙 / ⏰. The palette expands rather than the rule breaking:
+`HABIT_COLORS += { id: 'indigo', label: 'Indigo', hex: '#6366f1' }` and
+`HABIT_ICONS += { id: 'coffee', label: 'Coffee', glyph: '☕' }, { id: 'moon',
+label: 'Night', glyph: '🌙' }, { id: 'clock', label: 'Time', glyph: '⏰' }`.
+Additive and back-compatible — `colorOf`/`iconOf` already fall back for unknown
+ids, and existing habits gain three new icon options.
+
+**AD-030 — A habit belongs to at most one stack.**
+(2026-08-21, `stacks` §3.3) Adding a habit to stack B removes it from stack A.
+Settled by the prototype source, not invented here — `dragTo` splices from the
+origin and `addChips` filters on `!stacks.some(x => x.items.includes(k))`.
+Consequence: the Unstacked tray is the well-defined complement of the union of
+all stack `habitIds`.
+
+**AD-031 — Deleting a habit prunes it from stacks; archiving hides it.**
+(2026-08-21, `stacks` §3.4) Two distinct rules. A **deleted** habit has its id
+removed from every stack and the change persists immediately. An **archived**
+habit keeps its `id` in `habitIds`, the row does not render in `visibleHabits()`,
+and it is excluded from the "N of M done today" counts. Reactivating restores
+it to its original position. Mechanism: `StacksService` runs an `effect()` over
+`habitService.habits()` and prunes ids with no matching habit, using `untracked()`
+on reads so the write cannot re-trigger. Archived habits are still in `habits()`
+(not `activeHabits()`), so the distinction holds. Side note: `HabitService.archive()`
+opens a pause range, so an archived habit already reads `isDueOn() === false`.
+
+**AD-032 — Stack editing is inline, not modal.**
+(2026-08-21, `stacks` §3.5) The inline editor pattern follows
+`HabitFormComponent`: an `input<Stack | null>` signal gates the render, with
+`save()`/`cancel()` outputs from the form. The editor takes over the card's
+header in place of the static name/time/anchor display. Consistent with the
+house pattern; no modal primitive exists and the design provides no mockup for
+one.
+
 ## Blockers
 
 **B-001 — The Haiku-enforcement hook denied every non-`.md` edit in the repo.** → moved to `STATE-ARCHIVE.md`
 
 **B-002 — The Haiku-enforcement hook was dormant for every run, shadowed by its own documentation.** → moved to `STATE-ARCHIVE.md`
+
+**B-003 — There is no keyboard or touch reordering.**
+(2026-08-21, `stacks` §3.1) Native HTML5 DnD is mouse-only. The `+ Add habit`
+chip picker provides a non-drag way to add items to a stack, so the page is not
+unusable without dragging — but reordering within or between stacks is drag-only
+and inaccessible to keyboard and touch users. Accepted cost of AD-028.
 
 ## Lessons
 
@@ -327,6 +380,13 @@ disagree.
 - **L-028** — A guard keyed to one tool's input shape is not a guard on the action.
 - **L-029** — A verification step's mechanism must be checked against what it's checking, not assumed to see it.
 - **L-030** — A mutation check against already-sorted data can pass with the comparator deleted.
+- **L-031** — A design check whose state coverage depends on the weekday is a defective gate.
+- **L-032** — A spec whose name claims more than its assertions check.
+- **L-033** — A descendant selector written against a sibling class is dead and invisible to every gate.
+- **L-034** — An orphaned SCSS rule marks an element the template forgot to render.
+- **L-035** — The design-shot composite's resolution caps what can be verified visually.
+- **L-036** — `getComputedStyle` in ChromeHeadless at dpr 1 rounds fractional border widths.
+- **L-037** — `tasks.md` prose goes stale when an approved mid-run change invalidates a step's stated expectation.
 
 ## Quick Tasks
 
