@@ -119,7 +119,10 @@ function dataUri(path) {
 // Composites via a throwaway Playwright page rather than an image library, so the
 // only dependency stays playwright itself.
 async function composite(browser, targetPath, actualPath, outPath) {
-  const page = await browser.newPage({ viewport: { width: COLUMN_WIDTH * 2 + 48, height: 600 } });
+  const page = await browser.newPage({
+    viewport: { width: COLUMN_WIDTH * 2 + 48, height: 600 },
+    deviceScaleFactor: 2,
+  });
   await page.setContent(`
     <style>
       body { margin: 0; padding: 16px; background: #1b1b1b; font: 600 13px system-ui, sans-serif; }
@@ -182,7 +185,13 @@ async function main() {
 
   const browser = await chromium.launch();
   try {
-    const page = await browser.newPage({ viewport: { width: args.width, height: args.height } });
+    // deviceScaleFactor: 2 matches design/target/*.png, which are dpr-2 captures.
+    // At the default dpr 1, the composite downscaled both halves and could not
+    // resolve sub-2px detail (a 1.5px border, a 9.5px label) — L-035.
+    const page = await browser.newPage({
+      viewport: { width: args.width, height: args.height },
+      deviceScaleFactor: 2,
+    });
 
     // Seeded before the first navigation, so the app's service reads it on
     // construction. An empty store renders the empty state, which compares
