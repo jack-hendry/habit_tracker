@@ -242,6 +242,21 @@ the current build. Gaps caught vs screenshot:
 
 ## 4 — Analytics (NEW PAGE)
 
+> ✅ **Built** (2026-08-20) — spec in `specs/archive/2026-08-20-analytics/`,
+> decisions AD-023…AD-027. Two claims below were **wrong** and were corrected
+> against the prototype source during the build: the bar chart highlights the
+> **tallest bar in the 14-day window** (`bb.v === mx`), not "today's bar" —
+> the same class of mistake as Dashboard's AD-011 and Habits' streak claim,
+> now this section's own instance (AD-024); and the leaderboard is scored
+> from `lifetimeCounts`, not the raw `completionRate` this section implied —
+> `completionRate` returns `1` for a habit with no resolved due day, which
+> would have ranked a brand-new habit first at 100% (AD-023). Two things the
+> section omitted entirely: the leaderboard's habit **name is a `routerLink`
+> to `/habits/:id`** (§2b), and the heatmap's month-label *placement* has no
+> design source to check against — the prototype hand-positions those labels,
+> so it was verified manually rather than against source, unlike every other
+> value on the page.
+
 **Current state.** Does not exist. No route, no component, no aggregations.
 
 **UI changes (all new).**
@@ -338,12 +353,15 @@ caught vs screenshot:
 Shared primitives to extract early: `<stat-card>`, a bar/sparkline component, and
 the heatmap — used across Dashboard, Habits, and Analytics.
 
-Two of the three now exist: `<app-stat-card>` (§1) and `<app-day-strip>` (§2,
-`statuses` + `hex`). ~~which §2b re-uses at a longer window~~ — **wrong**, see
-§2b's correction banner: §2b needs its own 7-row `<app-activity-grid>`, and only
-the AD-015 colour *function* is shared with `day-strip`. §4's heatmap shares
-`activity-grid`'s layout but not its colour mapping (5-step blue over all
-habits), and is still outstanding.
+All three now exist: `<app-stat-card>` (§1), `<app-day-strip>` (§2, `statuses` +
+`hex`), and `<app-heat-grid>` + `<app-bar-chart>` (§4). ~~which §2b re-uses at a
+longer window~~ — **wrong**, see §2b's correction banner: §2b needs its own
+7-row `<app-activity-grid>`, and only the AD-015 colour *function* is shared
+with `day-strip`. §4's heatmap does **not** reuse `activity-grid` either —
+AD-026 keeps `<app-heat-grid>` a separate component: same 7-row geometry, but
+a different input contract (`rate: number | null` vs. a status enum) and a
+mutually exclusive colour mode (5-step blue over all habits, not per-habit
+status). Three grid-shaped components now exist on purpose, not by omission.
 
 **Page column widths are per-page, not shell-level** (global-shell AD-009) and
 they genuinely differ: Dashboard 960px, Habits 1000px, Habit detail 900px. Read
