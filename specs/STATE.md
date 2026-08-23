@@ -329,6 +329,34 @@ header in place of the static name/time/anchor display. Consistent with the
 house pattern; no modal primitive exists and the design provides no mockup for
 one.
 
+**AD-033 — `Model:` is a mandatory `tasks.md` step field.**
+(2026-08-21, `model-tiering` §3) Allowed values are `haiku`, `sonnet` and
+`top-level` — **never `opus`**. The mapping rule is mechanical: *a step is
+`sonnet` if and only if its `Done when` requires looking at an image; everything
+else is `haiku`.* `top-level` exists because
+`protect-spec-docs-from-subagents.sh` denies subagent writes to `tasks.md` /
+`Analyst.md` / `CriticReview.md`, so a wrap-up step cannot be delegated at all.
+Enforced by grep in the critic pass rather than by a runtime fallback, because an
+absent field silently inherits `~/.claude/settings.json` (`"model": "opus"`,
+`"effortLevel": "high"`) — the most expensive possible default — and making
+absence a *visible* defect is the entire point. The gate needs its non-zero
+guard: `steps=$(grep -c '^### Step ' tasks.md)` then
+`[ "$steps" -gt 0 ] && [ "$(grep -c '^\*\*Model:\*\*' tasks.md)" = "$steps" ]`.
+Without the guard a file whose headings sit at another level compares 0 to 0 and
+passes vacuously — which is exactly the state this spec's own `tasks.md` was in
+when the critic pass caught it.
+
+Paired change: `enforce-haiku-tasks-pretooluse.sh` now returns `ask` (not `deny`)
+when the **top-level** session runs a verification command — `npm|pnpm|yarn
+test|build|design:shot`, `ng test|build`, `scripts/design-shot.mjs` — while a
+marker is live. `ask` not `deny` so a stale marker costs one keystroke instead of
+a lockout (the B-002 failure mode). `verify_re` is anchored to a command position
+so `grep -rn "npm test" specs/` and `cat scripts/design-shot.mjs` stay allowed;
+`npm start` is deliberately unmatched because `design:shot` needs the dev server
+already running. Deny remains the fall-through, so `npm test > src/app/out.log`
+still denies. Known false negative: a wrapper prefix (`time npm test`) slips
+through — acceptable, since the decision is ASK.
+
 ## Blockers
 
 **B-001 — The Haiku-enforcement hook denied every non-`.md` edit in the repo.** → moved to `STATE-ARCHIVE.md`
@@ -340,6 +368,17 @@ one.
 chip picker provides a non-drag way to add items to a stack, so the page is not
 unusable without dragging — but reordering within or between stacks is drag-only
 and inaccessible to keyboard and touch users. Accepted cost of AD-028.
+
+**B-004 — The NOT TODAY pill's background and padding have no oracle.**
+(2026-08-21, `model-tiering` §3) The prototype writes both as bindings
+(`{{ h.ntBg }}`, `{{ h.ntPad }}`), so there is no CSS rule to transcribe and no
+value to assert. `habit-list.design.spec.ts` therefore asserts only the pill's
+literal declarations — `10px`, uppercase, `.5px` letter-spacing, `4px` radius,
+`#a3a7ad` — and those two declarations remain unverified by anything. Narrower
+than first reported: `.not-scheduled` *does* have a CSS rule
+(`habit-list.component.scss:217`); what is missing is the oracle for two of its
+declarations, not the rule. Inventing values to close the gap is the failure
+mode; the gap is recorded instead.
 
 ## Lessons
 
@@ -387,6 +426,9 @@ disagree.
 - **L-035** — The design-shot composite's resolution caps what can be verified visually.
 - **L-036** — `getComputedStyle` in ChromeHeadless at dpr 1 rounds fractional border widths.
 - **L-037** — `tasks.md` prose goes stale when an approved mid-run change invalidates a step's stated expectation.
+- **L-038** — The status-line model is the session's *configured* model, not the serving model of a running subagent.
+- **L-039** — A probe assertion on a value the prototype data-binds looks like coverage and tests nothing.
+- **L-040** — A step's `Done when` can name a file the step is forbidden to touch.
 
 ## Quick Tasks
 

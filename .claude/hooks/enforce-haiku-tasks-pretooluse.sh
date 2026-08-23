@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # PreToolUse hook: blocks the top-level session from directly editing code
 # files while a tasks.md execution is in progress, per CLAUDE.md's rule to
-# delegate tasks.md steps to a Haiku subagent (Agent tool, model: "haiku").
+# delegate tasks.md steps to a subagent (Agent tool, Model: per-step in tasks.md).
 #
 # Activation is explicit: the session opts in by adding a marker line to
 # STATE.md when it begins executing a spec's tasks.md --
@@ -63,16 +63,63 @@ esac
 # measures the running app is not the project code this rule exists to protect.
 protected_re='(src|scripts|\.claude/hooks)/[a-z0-9_./-]+|(angular|package|tsconfig[a-z0-9_.-]*)\.json|\.pre-commit-config\.yaml'
 
+decide() { # $1 = allow|ask|deny, $2 = target
+  case "$1" in
+    allow)
+      exit 0
+      ;;
+    ask)
+      local ask_reason="Verification commands like this should run inside the step's subagent (**Model: haiku** in tasks.md), not at the top level. The orchestrator's job is to read the step's report; approving once is acceptable if this is a deliberate spot check."
+      jq -n --arg reason "$ask_reason" '{
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "ask",
+          permissionDecisionReason: $reason
+        }
+      }'
+      exit 0
+      ;;
+    deny)
+      local target="$2"
+      local deny_reason='Per CLAUDE.md, implement tasks.md steps via a Haiku subagent (Agent tool, model: "haiku"), not by editing code directly from the top-level session. Active run: specs/'"$spec"' (declared by the '"'"'## Executing: '"$spec"''"'"' line in STATE.md -- remove it when the run is done). Blocked write to: '"$target"
+      jq -n --arg reason "$deny_reason" '{
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "deny",
+          permissionDecisionReason: $reason
+        }
+      }'
+      exit 0
+      ;;
+  esac
+}
+
 if [[ "$tool_name" == "Bash" ]]; then
   command=$(jq -r '.tool_input.command // empty' <<<"$input")
   if [[ -z "$command" ]]; then
     exit 0
   fi
 
+  # A verification command the ORCHESTRATOR should not be running by hand: the
+  # step's own `Done when` already runs it inside the subagent. Anchored to a
+  # command position so `grep -rn "npm test" specs/` and `cat scripts/design-shot.mjs`
+  # stay allowed. Known false negative: a wrapper prefix (`time npm test`)
+  # slips through -- acceptable, the decision is ASK not DENY.
+  verify_re='(^[[:space:]]*|[;&|(][[:space:]]*)'
+  verify_re+='((npm|pnpm|yarn)[[:space:]]+(run[[:space:]]+)?(test|build|design:shot)\b'
+  verify_re+='|(npx[[:space:]]+)?ng[[:space:]]+(test|build)\b'
+  verify_re+='|(node[[:space:]]+)?scripts/design-shot\.mjs)'
+  is_verify=0
+  grep -qE "$verify_re" <<<"$command" && is_verify=1
+
   # Stage 1: does it name a protected path at all? Reads (cat/grep/npx ng test)
   # mention them constantly and must stay allowed, so this alone never blocks.
   if ! tr '[:upper:]' '[:lower:]' <<<"$command" | grep -qE "$protected_re"; then
-    exit 0
+    if [[ $is_verify -eq 1 ]]; then
+      decide ask
+    else
+      exit 0
+    fi
   fi
 
   # Stage 2: does it look like a WRITE rather than a read? Four families:
@@ -91,7 +138,11 @@ if [[ "$tool_name" == "Bash" ]]; then
   write_re+='|writeFileSync|write_text\(|\.write\(|open\([^)]*['"'"'"]w'
 
   if ! grep -qE "$write_re" <<<"$command"; then
-    exit 0
+    if [[ $is_verify -eq 1 ]]; then
+      decide ask
+    else
+      exit 0
+    fi
   fi
   target="$command"
 else
@@ -101,13 +152,4 @@ else
   fi
 fi
 
-reason="Per CLAUDE.md, implement tasks.md steps via a Haiku subagent (Agent tool, model: \"haiku\"), not by editing code directly from the top-level session. Active run: specs/$spec (declared by the '## Executing: $spec' line in STATE.md -- remove it when the run is done). Blocked write to: $target"
-
-jq -n --arg reason "$reason" '{
-  hookSpecificOutput: {
-    hookEventName: "PreToolUse",
-    permissionDecision: "deny",
-    permissionDecisionReason: $reason
-  }
-}'
-exit 0
+decide deny "$target"

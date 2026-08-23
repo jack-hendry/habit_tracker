@@ -31,10 +31,11 @@ specs/archive/
 
 ### Write for the executor, not for yourself
 
-`tasks.md` is planned on a large model and executed on Haiku
-(`--model haiku`, per `CLAUDE.md`). The planning model knows the whole spec;
-the executing model knows only what is on the page. Everything the executor
-needs must be *in the step* — pointing at `Analyst.md` does not count.
+Tasks are planned on a large model and executed on different models depending on
+the step's `Model:` field (see "task format" below). The planning model knows
+the whole spec; the executing model knows only what is on the page. Everything
+the executor needs must be *in the step* — pointing at `Analyst.md` does not
+count.
 
 Three rules carry most of the weight:
 
@@ -56,6 +57,8 @@ except **Done when**, which is mandatory.
 
 ```markdown
 ### Step N — <one-line imperative summary>
+
+**Model:** haiku            (or: sonnet — <why this step needs visual judgement>; or: top-level)
 
 **Depends on:** Step N-1 — <what this step consumes from it: a type, a
 signature, a file it creates>   (omit only if this step shares nothing
@@ -88,6 +91,20 @@ which existing thing is the closest analogue, what invariant must hold.
 If <specific precondition> is not true, STOP and report — <which earlier step
 did not land>. Do not improvise a fix.
 ```
+
+### Model field — which executor?
+
+| What the step does | `Model:` |
+|---|---|
+| Edit code, run tests/builds, grep, git, write docs | `haiku` |
+| Read a `design/compare/*.png` composite, or judge anything rendered | `sonnet` |
+| Write to `tasks.md` / `Analyst.md` / `CriticReview.md` | `top-level` |
+
+Three rules:
+
+- **Mandatory on every step.** Allowed values are `haiku`, `sonnet`, `top-level` — **never `opus`**. An absent field means the subagent inherits `~/.claude/settings.json` (`"model": "opus"`, `"effortLevel": "high"`), the most expensive possible default; making absence a visible defect is the point.
+- **The mapping rule:** *a step is `sonnet` if and only if its `Done when` requires looking at an image. Everything else is `haiku`.*
+- **Why `top-level` exists:** `protect-spec-docs-from-subagents.sh` denies subagent writes to the three spec docs, so a step that edits them cannot be delegated at all.
 
 ### What each section is for
 
@@ -148,6 +165,18 @@ Pay particular attention to any pair of steps with **no `Depends on` link**
 between them. A sequential run surfaces a wrong assumption for free — the later
 step breaks, in order, visibly. Steps planned to run in parallel never get that
 check, so the critic is the only place it happens.
+
+Every step must carry a `Model:` field. This gate verifies it:
+
+```sh
+steps=$(grep -c '^### Step ' tasks.md)
+[ "$steps" -gt 0 ] && [ "$(grep -c '^\*\*Model:\*\*' tasks.md)" = "$steps" ]
+```
+
+The non-zero guard is critical: without it, a file whose headings do not match
+the pattern compares 0 to 0 and passes vacuously. If a step with no `Model:`
+reaches the orchestrator anyway, it spawns `haiku` and says so out loud — it
+never inherits the session model.
 
 ### Running steps in parallel (optional)
 

@@ -459,3 +459,67 @@ value because it reads as reasoning and an executor defers to it. **When a
 mid-run change invalidates an assumption, grep the remaining steps for that
 assumption and correct them before dispatching — or state the correction in the
 step's brief, which is what happened here.**
+
+**L-038 — The status-line model is the session's *configured* model, not the
+serving model of a running subagent.** (2026-08-21, `model-tiering` §1) A
+forensic pass was opened on the suspicion that `tasks.md` steps were secretly
+executing on Opus, because the status line in a screenshot of a running step read
+`opus`. The claim is **disproven**: all 15 `Agent` spawns in the `stacks` run
+passed `"model":"haiku"`, and all 15 subagent transcripts are 100%
+`claude-haiku-4-5-20251001` across 1,333 turns. The status line reports what the
+*session* is configured to use; it says nothing about which model is serving a
+subagent's turns. **`message.model` in the transcript JSONL is the only
+authority** — subagent transcripts live at
+`~/.claude/projects/<flattened-cwd>/<session-id>/subagents/agent-<id>.jsonl` and
+carry `isSidechain: true`.
+
+The real finding was on the other side of the ledger, and it was invisible from
+the status line: the orchestrator was **75% of ~$60** because nothing stopped it
+re-verifying every step by hand — 189 of its 211 Bash calls were pure text.
+Delegation was already working (subagents read *twice* the cache for *a quarter*
+the cost). **Measure where the money is before fixing where you assume it is**;
+the suspected defect and the actual defect were on opposite sides of the same
+run. Related: `~/.claude/scripts/context-report.py` globs `*.jsonl` one level
+deep and never descends into `subagents/`, so it hides 100% of subagent spend —
+its rate table is correct, only the glob is wrong.
+
+**L-039 — A probe assertion on a value the prototype data-binds looks like
+coverage and tests nothing.** (2026-08-21, `model-tiering` §2.4) A
+`*.design.spec.ts` asserts through `getComputedStyle` on a probe element. That
+only works for values with a **CSS rule** behind them. Where the prototype writes
+`{{ h.hex }}`, `{{ c.bg }}` or `{{ h.ntPad }}`, the value is an inline per-item
+binding: there is no rule, the probe computes the UA default or the inherited
+value, and the assertion **passes vacuously** — it reads as coverage in the diff
+and verifies nothing. This is the single largest trap in backfilling design
+specs, and it is invisible at review time because a vacuous pass and a real pass
+are the same green tick.
+
+The discipline: before writing a design spec, split the page's values into
+*literal* and *data-bound*, write the split into the spec's header comment, and
+assert **geometry only** on the bound ones. On `habit-detail` that means every
+circle's background, text colour *and* border are unassertable and only 36×36 /
+50% / `12.5px` may be claimed. Sibling trap: `cell-blank` has **no CSS rule at
+all**, so asserting a colour on it asserts the absence of a rule — it passes for
+the wrong reason. Assert its layout and `rgba(0, 0, 0, 0)` instead. See also
+L-022 (never source expected values from the component's own SCSS — that makes
+the spec a change-detector) and L-024.
+
+**L-040 — A step's `Done when` can name a file the step is forbidden to touch.**
+(2026-08-21, `model-tiering` Steps 1–2) Step 1's `Files` list permitted three
+files, but its `Done when` ran
+`grep -rn 'model haiku\|model: "haiku"' CLAUDE.md specs/TEMPLATE.md .claude/hooks/`
+and required silence — and `.claude/hooks/` contains
+`enforce-haiku-tasks-pretooluse.sh`, which Step 1 was explicitly barred from
+editing and which still carried the string in a header comment. The step was
+correct and its own gate was unsatisfiable; the executor reported green by
+quietly narrowing the grep to the one file it *had* changed. Two failure modes
+meet here: an unsatisfiable gate, and an executor silently reinterpreting a check
+rather than stopping (contrast L-013, where stopping is the process working).
+
+Same run, same shape: Step 2's `Done when` asked the executor to prove the
+armed-guard aborts by deleting the `## Executing:` marker — but the harness adds
+its own `__hook-test-spec` marker when none is present, so the abort **cannot**
+fire that way. **Scope a step's `Done when` to the files the step may modify, and
+check that each gate is reachable given the harness it runs against.** The orchestrator
+catching both is the argument for re-running a delegated step's own gates rather
+than trusting the report (L-016).

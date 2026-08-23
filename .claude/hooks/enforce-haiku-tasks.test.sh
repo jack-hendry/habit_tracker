@@ -29,10 +29,14 @@ for f in Analyst.md tasks.md CriticReview.md; do
   echo "Fixture for enforce-haiku-tasks.test.sh. Safe to delete." > "specs/$SPEC/$f"
 done
 
-if ! grep -q '^## Executing: ' STATE.md; then
+# Check if the marker already exists before potentially adding it
+existing_marker=$(grep -m1 -E '^## Executing: ' STATE.md 2>/dev/null | sed -E 's/^## Executing: *//; s/ *$//' || true)
+
+if [[ -z "$existing_marker" ]]; then
   printf '\n## Executing: %s\n' "$SPEC" >> STATE.md
   added=1
 fi
+
 cleanup() {
   rm -rf "specs/$SPEC"
   if [[ "${added:-0}" == 1 ]]; then
@@ -58,7 +62,12 @@ run() { # label expected tool tool_input_json
   local out got
   out=$(jq -n --arg t "$3" --arg c "$PWD" --argjson ti "$4" \
     '{tool_name:$t, cwd:$c, tool_input:$ti}' | "$HOOK")
-  got=$([[ -z "$out" ]] && echo ALLOW || echo DENY)
+  if [[ -z "$out" ]]; then
+    got=ALLOW
+  else
+    got=$(jq -r '.hookSpecificOutput.permissionDecision // "allow"' <<<"$out" \
+      | tr '[:lower:]' '[:upper:]')
+  fi
   if [[ "$got" == "$2" ]]; then
     echo "  ok   $got  $1"
   else
@@ -86,14 +95,24 @@ run "grep a component"     ALLOW Bash '{"command":"grep -nE \"#[0-9a-fA-F]{3,6}\
 run "cat a component"      ALLOW Bash '{"command":"cat src/app/calendar/calendar.component.ts"}'
 run "sed -n (read, not -i)" ALLOW Bash '{"command":"sed -n \"1,40p\" src/app/calendar/calendar.component.ts"}'
 # `2>&1` must not read as a redirect-to-file.
-run "ng test with 2>&1"    ALLOW Bash '{"command":"npx ng test --watch=false --browsers=ChromeHeadless 2>&1 | tail -3"}'
-run "ng build"             ALLOW Bash '{"command":"npx ng build"}'
-run "design:shot"          ALLOW Bash '{"command":"npm run design:shot -- calendar --width 1440 --seed"}'
-run "node scripts/design-shot" ALLOW Bash '{"command":"node scripts/design-shot.mjs calendar --seed"}'
+run "ng test with 2>&1"    ASK Bash '{"command":"npx ng test --watch=false --browsers=ChromeHeadless 2>&1 | tail -3"}'
+run "ng build"             ASK Bash '{"command":"npx ng build"}'
+run "design:shot"          ASK Bash '{"command":"npm run design:shot -- calendar --width 1440 --seed"}'
+run "node scripts/design-shot" ASK Bash '{"command":"node scripts/design-shot.mjs calendar --seed"}'
+run "npm test"              ASK Bash '{"command":"npm test"}'
+run "npm run build"         ASK Bash '{"command":"npm run build"}'
+run "cd /Users/x && npm test" ASK Bash '{"command":"cd /Users/x && npm test"}'
+run "design:shot dashboard" ASK Bash '{"command":"npm run design:shot -- dashboard --seed"}'
+run "npm test > src/app/out.log" DENY Bash '{"command":"npm test > src/app/out.log"}'
 run "read src, write /tmp" ALLOW Bash '{"command":"cat src/styles.scss > /tmp/copy.txt"}'
 run "npm start > log"      ALLOW Bash '{"command":"npm start > /tmp/ng.log 2>&1"}'
 run "throwaway at repo root" ALLOW Bash '{"command":"rm -f measure-cal.mjs"}'
 run "git status"           ALLOW Bash '{"command":"git status --short"}'
+run "grep npm test specs"  ALLOW Bash '{"command":"grep -rn \"npm test\" specs/"}'
+run "cat design-shot.mjs"  ALLOW Bash '{"command":"cat scripts/design-shot.mjs"}'
+run "bare npm start"       ALLOW Bash '{"command":"npm start"}'
+run "npm run watch"        ALLOW Bash '{"command":"npm run watch"}'
+run "test harness itself"  ALLOW Bash '{"command":"./.claude/hooks/enforce-haiku-tasks.test.sh"}'
 
 echo "== file tools: behaviour predating the Bash coverage =="
 run "Edit a source file" DENY  Edit '{"file_path":"/x/src/app/a.ts"}'
@@ -103,6 +122,8 @@ run "Read is exempt"     ALLOW Read '{"file_path":"/x/src/styles.scss"}'
 echo "== subagents are never blocked (they ARE the delegation target) =="
 out=$(jq -n --arg c "$PWD" '{tool_name:"Bash",agent_id:"abc",cwd:$c,tool_input:{command:"sed -i \"\" s/a/b/ src/styles.scss"}}' | "$HOOK")
 if [[ -z "$out" ]]; then echo "  ok   ALLOW  subagent sed -i"; else echo "  FAIL subagent was blocked"; fails=$((fails+1)); fi
+out=$(jq -n --arg c "$PWD" '{tool_name:"Bash",agent_id:"abc",cwd:$c,tool_input:{command:"npm test"}}' | "$HOOK")
+if [[ -z "$out" ]]; then echo "  ok   ALLOW  subagent npm test"; else echo "  FAIL subagent npm test was blocked"; fails=$((fails+1)); fi
 
 echo
 if [[ $fails -eq 0 ]]; then echo "all checks passed"; else echo "$fails FAILED"; fi
