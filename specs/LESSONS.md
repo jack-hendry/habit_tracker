@@ -546,3 +546,24 @@ any new local branch, which is why pushing this branch diffs the whole
 repository rather than just its commits. It passes only because `specs/STATE.md`
 also reads as added and every archived file is already under the 20 KB limit —
 luck, not design.
+
+**L-042 — The empty-tree fallback made the archive gate pass on exactly the push it exists to block.**
+(2026-08-25, Part 4 of the config homework) On the first push of a new branch
+there is no `origin/<branch>`, and `clean-table-check.sh` fell back to diffing
+against the empty tree so that "every committed file reads as newly added".
+That fallback also makes `specs/STATE.md` read as added, and the archive gate
+asks only whether `specs/STATE.md` appears in the diff — so it was satisfied
+unconditionally. A branch whose single commit archived a spec and touched
+nothing else pushed cleanly, hook reporting `Passed`, with no `--no-verify`
+needed. The gate had a false negative precisely in the case it was written for:
+a brand-new feature branch is what an archive push normally *is*.
+
+Two things worth keeping. First, a fallback chosen to be "conservative" was
+conservative about the wrong thing — over-reporting added files reads as strict,
+but the gate's question was membership, not count, so over-reporting satisfied
+it. Match the fallback to the *question the check asks*, not to a general sense
+of caution. Second, this survived because it was only ever tested on branches
+that already had an upstream; the CI work in [[L-041]] tested range selection on
+an existing branch and the bug lives one branch-state earlier. The fix diffs
+against the merge base with `origin/HEAD` (falling back to `origin/main`),
+keeping the empty tree only for genuinely unrelated history.
