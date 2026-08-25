@@ -29,12 +29,42 @@ export class DashboardComponent {
     return this.habits().filter((h) => h.completedDates.includes(this.todayIso));
   });
 
+  /**
+   * Deliberately NOT `HabitService.isLapsed`, which flags a habit forever once
+   * it has missed even one day anywhere in its history (documented, tested
+   * behaviour — habit.service.ts R4). Against real seed history nearly every
+   * long-running habit has one miss somewhere, so that definition pins almost
+   * the whole list here permanently and the "Overdue / slipping" panel stops
+   * meaning anything (dashboard mockup shows only the one habit currently
+   * slipping). This panel wants "currently slipping": not already checked off
+   * today, and the most recently resolved due day before today (skipping
+   * not-due days) was missed.
+   */
   readonly lapsed = computed(() => {
     return this.habits().filter(
       (h) => !this.habitService.isPaused(h, this.today) &&
-             this.habitService.isLapsed(h, this.today)
+             this.isRecentlyLapsed(h)
     );
   });
+
+  private isRecentlyLapsed(habit: Habit): boolean {
+    if (habit.completedDates.includes(this.todayIso)) {
+      return false;
+    }
+    const startIso = habit.startDate ?? HabitService.todayIso(new Date(habit.createdAt));
+    let cursor = HabitService.shiftIso(this.todayIso, -1);
+    while (cursor >= startIso) {
+      const status = this.habitService.dayStatus(habit, cursor, this.today);
+      if (status === 'done') {
+        return false;
+      }
+      if (status === 'missed') {
+        return true;
+      }
+      cursor = HabitService.shiftIso(cursor, -1);
+    }
+    return false;
+  }
 
   /**
    * Pooled over every resolved due day of every active habit — NOT the mean of
