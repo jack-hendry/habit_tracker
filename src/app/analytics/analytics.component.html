@@ -82,7 +82,7 @@
           <div class="weekday-rows">
             @for (day of weekdays(); track $index) {
               <div [class]="'weekday-row ' + (day.best ? 'dow-best' : 'dow-rest')">
-                <div class="day-name" [style.font-weight]="day.best ? '700' : '500'">{{ day.name }}</div>
+                <div class="day-name">{{ day.name }}</div>
                 <div class="track">
                   @if (day.hasRate) {
                     <div

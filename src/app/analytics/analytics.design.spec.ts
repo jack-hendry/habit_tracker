@@ -1,76 +1,185 @@
 import { TestBed } from '@angular/core/testing';
-import { AnalyticsComponent } from './analytics.component';
-import { HabitService } from '../habit/habit.service';
 import { ActivatedRoute } from '@angular/router';
+import { AnalyticsComponent } from './analytics.component';
+import { HeatGridComponent } from '../shared/heat-grid/heat-grid.component';
+import { BarChartComponent } from '../shared/bar-chart/bar-chart.component';
 
 /**
  * Design conformance for the analytics charts (roadmap §4).
  *
- * Transcribed design values from `Habit Tracker Prototype.dc.html` (lines 179–246, 453–474).
- * Most assertions use probe elements carrying the real component's Angular
- * `_ngcontent-*` attribute (per calendar.design.spec.ts, AD-022) rather than
- * asserting against seeded/rendered data — this exercises the real CSS
- * cascade without depending on which classes the app's own logic happens to
- * produce.
+ * WHY IT DOES NOT READ THE SCSS
+ * -----------------------------
+ * Every expected value below is transcribed from the PROTOTYPE SOURCE
+ * (`Habit Tracker Prototype.dc.html`, markup 179–246, logic 453–474), never
+ * from the component's own stylesheet. Copying the SCSS would make this a
+ * change-detector that agrees with whatever the component happens to say.
+ * Reading `getComputedStyle` rather than the stylesheet text is also what
+ * catches a rule that is correct but loses on specificity (L-025).
  *
- * One exception: the weekday `.day-name` font-weight (700/500) is an inline
- * style bound directly to component logic (`day.best ? '700' : '500'`) —
- * analytics.component.scss has no font-weight rule for `.day-name` at all, so
- * there is no CSS cascade to probe. That one assertion renders the real
- * component instead, with seed data engineered so the "best" weekday is
- * deterministic (every weekday tied at 100% resolves to Sunday, index 0, by
- * the component's first-max-wins tie-break — see analytics.component.ts
- * `weekdays()`) regardless of which day the suite happens to run on.
+ * WHY IT DOES NOT SEED DATA
+ * -------------------------
+ * The blind spot this file exists to close is that a rendered view only
+ * exercises the states its data happens to produce (L-026). The first version
+ * of this file seeded localStorage and asserted against whatever came out; its
+ * own mutation check proved the consequence — changing `--heat-2` to another
+ * colour failed nothing at all, because no seeded day landed in that band. So
+ * four of the five heat steps were verified by nothing while the suite was
+ * green.
+ *
+ * Two techniques replace the seed, chosen per component:
+ *
+ *   - The two presentational charts take their data as required inputs, so
+ *     they are driven DIRECTLY with values chosen to hit every band. No date
+ *     arithmetic, no storage, no state that can fail to appear.
+ *   - The analytics page's own rules are checked with PROBE ELEMENTS carrying
+ *     the component's `_ngcontent-*` attribute (the technique documented at
+ *     the top of `calendar.design.spec.ts`), which is date-independent and
+ *     renders every state unconditionally.
  */
-describe('AnalyticsComponent design conformance', () => {
-  // Transcribed from the prototype. rgb() form is what getComputedStyle returns.
-  const HEAT_0 = 'rgb(235, 237, 240)'; // #ebedf0
-  const HEAT_1 = 'rgb(199, 220, 241)'; // #c7dcf1
-  const HEAT_2 = 'rgb(127, 176, 222)'; // #7fb0de
-  const HEAT_3 = 'rgb(60, 135, 205)'; // #3c87cd
-  const HEAT_4 = 'rgb(0, 102, 204)'; // #0066cc
 
-  const BAR_MAX = 'rgb(0, 102, 204)'; // #0066cc
-  const BAR_REST = 'rgb(189, 214, 238)'; // #bdd6ee
-  const BAR_LABEL_MAX = 'rgb(0, 102, 204)'; // #0066cc
-  const BAR_LABEL_REST = 'rgb(154, 160, 168)'; // #9aa0a8
+// Transcribed from the prototype. rgb() form is what getComputedStyle returns.
+const HEAT = ['rgb(235, 237, 240)', 'rgb(199, 220, 241)', 'rgb(127, 176, 222)', 'rgb(60, 135, 205)', 'rgb(0, 102, 204)'];
+const BAR_MAX = 'rgb(0, 102, 204)'; // #0066cc
+const BAR_REST = 'rgb(189, 214, 238)'; // #bdd6ee
+const BAR_LABEL_REST = 'rgb(154, 160, 168)'; // #9aa0a8
+const TRACK_BG = 'rgb(240, 240, 238)'; // #f0f0ee, --card-divider
+const RATE_TEXT = 'rgb(58, 63, 69)'; // #3a3f45, --cal-label
 
-  const TRACK_BG = 'rgb(240, 240, 238)'; // #f0f0ee
-  const RATE_TEXT = 'rgb(58, 63, 69)'; // #3a3f45
+/** Reads the emulated-encapsulation attribute off a real templated element. */
+function contentAttrOf(host: HTMLElement, selector: string): string {
+  const templated = host.querySelector(selector);
+  const found = templated
+    ? Array.from(templated.attributes)
+        .map((a) => a.name)
+        .find((n) => n.startsWith('_ngcontent-'))
+    : undefined;
+  // Fail loudly: silently unstyled probes would make every assertion below
+  // pass against browser defaults.
+  expect(found)
+    .withContext(`no _ngcontent-* on ${selector} — probes would be unstyled and these tests meaningless`)
+    .toBeDefined();
+  return found!;
+}
 
+describe('HeatGridComponent design conformance', () => {
   let host: HTMLElement;
-  let analyticsAttr: string;
-  let barChartAttr: string;
+
+  /** Renders the real component over `rates` and returns its cells. */
+  function render(rates: Array<number | null>): HTMLElement[] {
+    TestBed.configureTestingModule({ imports: [HeatGridComponent] });
+    const fixture = TestBed.createComponent(HeatGridComponent);
+    fixture.componentRef.setInput('rates', rates);
+    fixture.componentRef.setInput('startIso', '2026-01-04'); // a Sunday
+    fixture.detectChanges();
+    host = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(host);
+    return Array.from(host.querySelectorAll<HTMLElement>('.cell'));
+  }
+
+  afterEach(() => {
+    host?.remove();
+    TestBed.resetTestingModule();
+  });
+
+  // All five steps, unconditionally — including the four that the seeded
+  // version of this file left unverified.
+  it('paints all five heat steps with the prototype colours', () => {
+    // One rate per band, in order. null and 0 share step 0 by design
+    // (Analyst §3 A / AD-010): a day with nothing due is not a day all missed.
+    const cells = render([null, 0, 0.2, 0.5, 0.9, 1]);
+    const expected = [0, 0, 1, 2, 3, 4];
+    expect(cells.length).toBe(expected.length);
+    cells.forEach((cell, i) => {
+      const step = expected[i];
+      expect(cell.classList).withContext(`cell ${i} class`).toContain(`heat-${step}`);
+      expect(getComputedStyle(cell).backgroundColor)
+        .withContext(`cell ${i} (rate index ${i}) expected heat-${step}`)
+        .toBe(HEAT[step]);
+    });
+  });
+
+  // If a future edit collapses the ramp, the per-step assertions above still
+  // pass one at a time. This is what notices.
+  it('gives the five steps five DIFFERENT colours', () => {
+    const cells = render([0, 0.2, 0.5, 0.9, 1]);
+    const colours = cells.map((c) => getComputedStyle(c).backgroundColor);
+    expect(new Set(colours).size).toBe(5);
+  });
+
+  // The thresholds themselves, transcribed from the prototype's ladder.
+  // Off-by-one on a bound is invisible in any screenshot.
+  it('places each threshold boundary in the band the prototype specifies', () => {
+    const cases: Array<[number, number]> = [
+      [0.349, 1],
+      [0.35, 2],
+      [0.699, 2],
+      [0.7, 3],
+      [0.999, 3],
+      [1, 4],
+    ];
+    const cells = render(cases.map(([rate]) => rate));
+    cases.forEach(([rate, step], i) => {
+      expect(getComputedStyle(cells[i]).backgroundColor)
+        .withContext(`rate ${rate} belongs to heat-${step}`)
+        .toBe(HEAT[step]);
+    });
+  });
+});
+
+describe('BarChartComponent design conformance', () => {
+  let host: HTMLElement;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({ imports: [BarChartComponent] });
+    const fixture = TestBed.createComponent(BarChartComponent);
+    // Index 1 is the maximum. Driving the input directly means both states
+    // always render, rather than depending on what a seed produces.
+    fixture.componentRef.setInput('bars', [
+      { label: '1', value: 2 },
+      { label: '2', value: 5 },
+    ]);
+    fixture.detectChanges();
+    host = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(host);
+  });
+
+  afterEach(() => {
+    host?.remove();
+    TestBed.resetTestingModule();
+  });
+
+  it('fills the maximum bar with the accent and the rest with the pale tint', () => {
+    const bars = host.querySelectorAll<HTMLElement>('.bar');
+    expect(bars.length).toBe(2);
+    expect(bars[0].classList).toContain('bar-rest');
+    expect(bars[1].classList).toContain('bar-max');
+    expect(getComputedStyle(bars[0]).backgroundColor).withContext('non-max bar').toBe(BAR_REST);
+    expect(getComputedStyle(bars[1]).backgroundColor).withContext('max bar').toBe(BAR_MAX);
+  });
+
+  it('colours the maximum bar label with the accent and the rest with the muted grey', () => {
+    const labels = host.querySelectorAll<HTMLElement>('.label');
+    expect(labels.length).toBe(2);
+    expect(getComputedStyle(labels[0]).color).withContext('non-max label').toBe(BAR_LABEL_REST);
+    expect(getComputedStyle(labels[1]).color).withContext('max label').toBe(BAR_MAX);
+  });
+
+  it('gives the bar and its label different greys when not the maximum', () => {
+    // The fill is #bdd6ee and the label #9aa0a8 — two separate tokens that a
+    // careless edit would collapse into one.
+    const bar = host.querySelector<HTMLElement>('.bar.bar-rest')!;
+    const label = host.querySelector<HTMLElement>('.label.bar-rest')!;
+    expect(getComputedStyle(bar).backgroundColor).not.toBe(getComputedStyle(label).color);
+  });
+});
+
+describe('AnalyticsComponent design conformance', () => {
+  let host: HTMLElement;
+  let root: HTMLElement;
+  let contentAttr: string;
 
   beforeEach(() => {
     localStorage.clear();
-
-    // One habit, due and completed every day for three weeks: guarantees
-    // every weekday bucket ties at rate 1, so weekdays()'s first-max-wins
-    // tie-break deterministically picks Sunday (index 0) as "best" no matter
-    // which real-world day this suite runs on. Also guarantees hasHabits()
-    // is true, so every probe container below actually renders.
-    const todayIso = HabitService.todayIso(today());
-    const startIso = HabitService.shiftIso(todayIso, -20);
-    const completedDates: string[] = [];
-    for (let offset = 20; offset >= 0; offset--) {
-      completedDates.push(HabitService.shiftIso(todayIso, -offset));
-    }
-
-    const habit = {
-      id: 'probe-1',
-      name: 'Probe habit',
-      createdAt: today().toISOString(),
-      completedDates,
-      schedule: { type: 'daily' },
-      category: 'Test',
-      color: 'sky',
-      icon: 'book',
-      startDate: startIso,
-      status: 'active' as const,
-    };
-    localStorage.setItem('habit_tracker.habits.v1', JSON.stringify([habit]));
-
     TestBed.configureTestingModule({
       imports: [AnalyticsComponent],
       providers: [{ provide: ActivatedRoute, useValue: {} }],
@@ -79,120 +188,70 @@ describe('AnalyticsComponent design conformance', () => {
     fixture.detectChanges();
     host = fixture.nativeElement as HTMLElement;
     document.body.appendChild(host);
-
-    analyticsAttr = ngContentAttrOf(host.querySelector('.weekday-rows'), '.weekday-rows');
-    barChartAttr = ngContentAttrOf(
-      host.querySelector('app-bar-chart .bar-row'),
-      'app-bar-chart .bar-row',
-    );
+    // `.page-container` sits outside the @if, so it is present with no habits.
+    contentAttr = contentAttrOf(host, '.page-container');
+    root = host.querySelector<HTMLElement>('.page-container')!;
   });
 
-  afterEach(() => host?.remove());
+  afterEach(() => {
+    host?.remove();
+    TestBed.resetTestingModule();
+  });
 
-  function today(): Date {
-    return new Date();
-  }
-
-  function ngContentAttrOf(el: Element | null, label: string): string {
-    const found = el && Array.from(el.attributes).map((a) => a.name).find((n) => n.startsWith('_ngcontent-'));
-    expect(found).withContext(`no _ngcontent-* found on ${label} — probes would be unstyled`).toBeDefined();
-    return found!;
-  }
-
-  function probe(container: Element, classes: string, attr: string): HTMLElement {
+  /** Builds a scoped element tree from `[class, ...children]` shorthand. */
+  function probe(className: string, children: HTMLElement[] = []): HTMLElement {
     const el = document.createElement('div');
-    el.className = classes;
-    el.setAttribute(attr, '');
-    container.appendChild(el);
+    el.className = className;
+    el.setAttribute(contentAttr, '');
+    children.forEach((c) => el.appendChild(c));
     return el;
   }
 
-  // Heatmap: `.cell`'s background is 100% inline-style-driven
-  // (`[style.background]="'var(' + stepFor(rate) + ')'"` in heat-grid.component.html) —
-  // heat-grid.component.scss has no background rule for `.cell` at all, so there is
-  // no scoped rule to probe. The tokens are true global `:root` custom properties
-  // (src/styles.scss), so a bare unscoped probe (no component `_ngcontent`
-  // attribute needed) is sufficient to validate them.
-  const heatSteps: Array<[string, string]> = [
-    ['--heat-0', HEAT_0],
-    ['--heat-1', HEAT_1],
-    ['--heat-2', HEAT_2],
-    ['--heat-3', HEAT_3],
-    ['--heat-4', HEAT_4],
-  ];
-  for (const [token, expected] of heatSteps) {
-    it(`heatmap ${token} resolves to the correct colour`, () => {
-      const cell = document.createElement('div');
-      cell.style.background = `var(${token})`;
-      document.body.appendChild(cell);
-      expect(getComputedStyle(cell).backgroundColor).toBe(expected);
-      cell.remove();
-    });
+  function mount(el: HTMLElement): HTMLElement {
+    root.appendChild(el);
+    return el;
   }
 
-  // Bar chart fill + label colours (bar-chart.component.scss — bar-chart's own
-  // encapsulation instance, distinct from analytics's own `_ngcontent-*`).
-  it('bar chart bar-max fill and label are correct', () => {
-    const barRow = host.querySelector('app-bar-chart .bar-row')!;
-    const bar = probe(barRow, 'bar bar-max', barChartAttr);
-    const label = probe(barRow, 'label bar-max', barChartAttr);
-    expect(getComputedStyle(bar).backgroundColor).toBe(BAR_MAX);
-    expect(getComputedStyle(label).color).toBe(BAR_LABEL_MAX);
-  });
-
-  it('bar chart bar-rest fill and label are correct', () => {
-    const barRow = host.querySelector('app-bar-chart .bar-row')!;
-    const bar = probe(barRow, 'bar bar-rest', barChartAttr);
-    const label = probe(barRow, 'label bar-rest', barChartAttr);
-    expect(getComputedStyle(bar).backgroundColor).toBe(BAR_REST);
-    expect(getComputedStyle(label).color).toBe(BAR_LABEL_REST);
-  });
-
-  // Weekday fill (analytics.component.scss: `.weekday-row .fill.bar-max`/`.bar-rest`).
-  it('weekday best-day fill is bar-max coloured', () => {
-    const rows = host.querySelector('.weekday-rows')!;
-    const row = probe(rows, 'weekday-row dow-best', analyticsAttr);
-    const track = probe(row, 'track', analyticsAttr);
-    const fill = probe(track, 'fill bar-max', analyticsAttr);
-    expect(getComputedStyle(fill).backgroundColor).toBe(BAR_MAX);
-  });
-
-  it('weekday rest-day fill is bar-rest coloured', () => {
-    const rows = host.querySelector('.weekday-rows')!;
-    const row = probe(rows, 'weekday-row dow-rest', analyticsAttr);
-    const track = probe(row, 'track', analyticsAttr);
-    const fill = probe(track, 'fill bar-rest', analyticsAttr);
-    expect(getComputedStyle(fill).backgroundColor).toBe(BAR_REST);
-  });
-
-  // Weekday day-name font-weight: no CSS rule exists to probe against (see file
-  // header) — assert the real rendered component instead, using tie-broken
-  // deterministic seed data so the "best" row is always Sunday.
-  it('best weekday (Sunday, tie-break winner) renders 700-weight name; a rest day renders 500', () => {
-    const bestRow = host.querySelector('.weekday-row.dow-best .day-name') as HTMLElement | null;
-    const restRow = host.querySelector('.weekday-row.dow-rest .day-name') as HTMLElement | null;
-    expect(bestRow).withContext('expected exactly one dow-best weekday row').not.toBeNull();
-    expect(restRow).withContext('expected at least one dow-rest weekday row').not.toBeNull();
-    expect(bestRow!.textContent?.trim()).toBe('Sun');
-    expect(getComputedStyle(bestRow!).fontWeight).toBe('700');
-    expect(getComputedStyle(restRow!).fontWeight).toBe('500');
-  });
-
-  // Leaderboard track + rate-text (bare `.track`/`.rate-text` rules). Deliberately
-  // NOT probed nested inside a `.weekday-row` element, which carries its own more
-  // specific `.weekday-row .track` rule (10px/5px-radius vs the bare rule's
-  // 12px/6px-radius) that would otherwise win the cascade and mask a regression.
-  it('leaderboard track background is card-divider colour', () => {
-    const rows = host.querySelector('.leaderboard-rows')!;
-    const row = probe(rows, 'leaderboard-row', analyticsAttr);
-    const track = probe(row, 'track', analyticsAttr);
+  it('paints the leaderboard track with the card-divider grey', () => {
+    const track = probe('track');
+    mount(probe('leaderboard-row', [track]));
     expect(getComputedStyle(track).backgroundColor).toBe(TRACK_BG);
   });
 
-  it('leaderboard rate text colour is cal-label', () => {
-    const rows = host.querySelector('.leaderboard-rows')!;
-    const row = probe(rows, 'leaderboard-row', analyticsAttr);
-    const rate = probe(row, 'rate-text', analyticsAttr);
+  it('paints the leaderboard rate text with the cal-label grey', () => {
+    const rate = mount(probe('rate-text'));
     expect(getComputedStyle(rate).color).toBe(RATE_TEXT);
+    expect(getComputedStyle(rate).fontWeight).toBe('700');
+  });
+
+  it('fills the best weekday with the accent and the others with the pale tint', () => {
+    for (const [state, cls, expected] of [
+      ['dow-best', 'bar-max', BAR_MAX],
+      ['dow-rest', 'bar-rest', BAR_REST],
+    ] as const) {
+      const fill = probe(`fill ${cls}`);
+      mount(probe(`weekday-row ${state}`, [probe('track', [fill])]));
+      expect(getComputedStyle(fill).backgroundColor).withContext(`${state} fill`).toBe(expected);
+    }
+  });
+
+  // The best day is bolded against the rest. This value used to live in a
+  // template [style.font-weight] binding, where no stylesheet check could
+  // reach it; it is in the cascade now precisely so this can assert it.
+  it('bolds the best weekday name against the others', () => {
+    for (const [state, weight] of [
+      ['dow-best', '700'],
+      ['dow-rest', '500'],
+    ] as const) {
+      const name = probe('day-name');
+      mount(probe(`weekday-row ${state}`, [name]));
+      expect(getComputedStyle(name).fontWeight).withContext(`${state} day name`).toBe(weight);
+    }
+  });
+
+  it('paints the weekday percentage with the cal-label grey', () => {
+    const pct = probe('pct');
+    mount(probe('weekday-row', [pct]));
+    expect(getComputedStyle(pct).color).toBe(RATE_TEXT);
   });
 });

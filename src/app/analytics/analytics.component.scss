@@ -213,6 +213,18 @@ h1 {
   color: var(--text-sub);
 }
 
+/* The best weekday is bolded. This lives here rather than in a template
+   [style.font-weight] binding so that `dow-best`/`dow-rest` carry the design
+   value in the cascade, where analytics.design.spec.ts can probe it. A value
+   bound inline is verified by nothing but the seed that happens to render it. */
+.weekday-row.dow-best .day-name {
+  font-weight: 700;
+}
+
+.weekday-row.dow-rest .day-name {
+  font-weight: 500;
+}
+
 .weekday-row .track {
   flex: 1;
   height: 10px;
