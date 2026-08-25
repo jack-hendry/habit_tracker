@@ -523,3 +523,26 @@ fire that way. **Scope a step's `Done when` to the files the step may modify, an
 check that each gate is reachable given the harness it runs against.** The orchestrator
 catching both is the argument for re-running a delegated step's own gates rather
 than trusting the report (L-016).
+
+**L-041 — A check that computes its own diff range is only as trustworthy as that range, and a new environment silently changes it.**
+(2026-08-25, Part 4 of the config homework) `clean-table-check.sh` derived its
+range from `git rev-parse --abbrev-ref HEAD`. That is correct in a pre-push
+hook and wrong in GitHub Actions, where `actions/checkout` leaves HEAD detached
+on the PR merge commit: `--abbrev-ref` returns the literal string `HEAD`, no
+`origin/HEAD` ref exists in a fresh CI clone, and the no-upstream fallback
+diffs against the **empty tree** — so every file in the repository reads as
+newly added and all 31 files under `specs/archive/` become "this push archived
+a spec". The gates themselves were all correct; the input to them was not. A
+check like this can fail in both directions from one bad range — over-flag, as
+here, or pass vacuously on an empty diff — and neither shows up as an error,
+only as a green or red tick that means nothing. Verify the *range selection*
+separately from the gates: the four paths were each confirmed to resolve to the
+intended range before the workflow was ever pushed, and gate 1's block/pass
+outcomes were driven by synthetic commits built with `git commit-tree`, which
+needs no branch and no working-tree change.
+
+Related: the same empty-tree fallback still fires on the genuine first push of
+any new local branch, which is why pushing this branch diffs the whole
+repository rather than just its commits. It passes only because `specs/STATE.md`
+also reads as added and every archived file is already under the 20 KB limit —
+luck, not design.

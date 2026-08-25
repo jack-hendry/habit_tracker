@@ -15,6 +15,9 @@
 # This script CHECKS. It never edits files or commits on your behalf — on
 # failure it prints the exact fix and exits non-zero so the push is refused.
 #
+# Runs in two places, and they must agree — a local pre-push hook can be
+# skipped with `git push --no-verify`, CI cannot. See .github/workflows/ci.yml.
+#
 # Usage: run via the pre-push git hook (wired through pre-commit, see
 # .pre-commit-config.yaml). To test without pushing for real, set
 # RANGE_OVERRIDE to any <rev>..<rev> range:
@@ -25,8 +28,37 @@ set -euo pipefail
 SIZE_LIMIT_BYTES=20480 # 20 KB
 
 # --- Determine the diff range -----------------------------------------
+ZERO_SHA="0000000000000000000000000000000000000000"
+
 if [[ -n "${RANGE_OVERRIDE:-}" ]]; then
   RANGE="$RANGE_OVERRIDE"
+elif [[ -n "${GITHUB_BASE_REF:-}" ]]; then
+  # GitHub Actions, pull_request event. HEAD is detached here (actions/checkout
+  # gives you the PR's merge commit), so the local-branch logic below would see
+  # a branch literally named "HEAD", find no origin/HEAD, and fall through to
+  # the empty-tree case — flagging every file in the repo as newly added. Fetch
+  # the base branch explicitly (checkout only fetches the PR ref) and diff from
+  # the merge base, which is correct for either checkout shape.
+  git fetch --no-tags --quiet origin "$GITHUB_BASE_REF"
+  if ! MERGE_BASE="$(git merge-base FETCH_HEAD HEAD)"; then
+    echo "clean-table-check: no merge base with origin/${GITHUB_BASE_REF}" >&2
+    exit 1
+  fi
+  RANGE="${MERGE_BASE}..HEAD"
+elif [[ "${GITHUB_EVENT_NAME:-}" == "push" ]]; then
+  # GitHub Actions, push event. BEFORE_SHA is github.event.before, passed in
+  # from the workflow. It is all-zeros when the branch was just created, and
+  # names a discarded commit after a force push — in both cases fall back to
+  # the empty tree, the same conservative choice the local no-upstream path
+  # makes below.
+  BEFORE="${BEFORE_SHA:-}"
+  if [[ -n "$BEFORE" && "$BEFORE" != "$ZERO_SHA" ]] \
+    && git rev-parse --verify --quiet "${BEFORE}^{commit}" >/dev/null; then
+    RANGE="${BEFORE}..HEAD"
+  else
+    EMPTY_TREE="$(git hash-object -t tree /dev/null)"
+    RANGE="${EMPTY_TREE}..HEAD"
+  fi
 else
   BRANCH="$(git rev-parse --abbrev-ref HEAD)"
   if git rev-parse --verify --quiet "origin/${BRANCH}" >/dev/null; then
