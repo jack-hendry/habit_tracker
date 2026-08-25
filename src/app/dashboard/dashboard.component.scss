@@ -1,149 +1,185 @@
-.dashboard-container {
-  max-width: 800px;
+/* Redesign §1 — values sampled from the Claude Design prototype source, not
+   eyeballed (specs/dashboard-redesign/Analyst.md §2). Colours are tokens only
+   (AD-009); a hex literal in this file is a bug. */
+
+.dashboard {
+  max-width: 960px; /* the Dashboard's own column — the shell imposes none */
   margin: 0 auto;
-  padding: 2rem 1rem;
+  padding: var(--content-pad);
 }
 
-.dashboard-header {
+.page-head {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
+  justify-content: space-between;
+  margin-bottom: 18px;
 
   h1 {
     margin: 0;
-    font-size: 2rem;
-  }
-
-  .overall-rate {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    gap: 0.5rem;
-
-    .rate-label {
-      font-size: 0.875rem;
-      color: #666;
-    }
-
-    .rate-value {
-      font-size: 1.75rem;
-      font-weight: bold;
-      color: #0066cc;
-    }
+    font-size: 23px;
+    letter-spacing: -0.3px;
+    color: var(--text-strong);
   }
 }
 
+.overall {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+/* Sentence case in the DOM, uppercased here — same trick as the stat labels. */
+.overall-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.overall-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
 .section {
-  margin-bottom: 2rem;
+  margin-bottom: 22px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
 
   h2 {
-    font-size: 1.25rem;
-    margin-bottom: 1rem;
-    padding-bottom: 0.5rem;
-    border-bottom: 2px solid #f0f0f0;
+    margin: 0 0 10px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--rule);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-strong);
   }
+}
 
-  .no-items {
-    color: #999;
-    font-style: italic;
-    margin: 0;
-  }
+.no-items {
+  margin: 0;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text-faint);
 }
 
 .habit-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 8px;
 }
 
-.habit-item {
+.habit-row {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  padding: 0.75rem;
-  background-color: #f9f9f9;
-  border-radius: 4px;
-  border-left: 4px solid #e0e0e0;
+  gap: 12px;
+  padding: 11px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--row-neutral);
+  border-radius: var(--radius-card);
 
+  /* `border-color` would reset the left edge too, so the accent comes after. */
   &.done {
-    background-color: #f0fdf4;
-    border-left-color: #22c55e;
+    background: var(--done-bg);
+    border-color: var(--done-border);
+    border-left-color: var(--done);
   }
 
   &.lapsed {
-    background-color: #fef2f2;
-    border-left-color: #ef4444;
-  }
-
-  .habit-checkbox {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    cursor: pointer;
-    flex: 1;
-
-    input[type='checkbox'] {
-      width: 20px;
-      height: 20px;
-      cursor: pointer;
-    }
-
-    .habit-name {
-      font-weight: 500;
-    }
-  }
-
-  .habit-name {
-    flex: 1;
-  }
-
-  .last-done {
-    font-size: 0.875rem;
-    color: #666;
-  }
-
-  .completion-rate {
-    font-size: 0.875rem;
-    font-weight: bold;
-    color: #0066cc;
-    min-width: 40px;
-    text-align: right;
+    background: var(--missed-bg);
+    border-color: var(--missed-border);
+    border-left-color: var(--missed);
   }
 }
 
-.empty-state {
+/* The toggleable rows are <label>s, so the whole row is a click target. */
+label.habit-row {
+  cursor: pointer;
+}
+
+/* A native checkbox cannot be a 20x20 rounded square, so it is redrawn.
+   It stays a real <input> — the row's keyboard operability depends on it
+   (CriticReview R8). */
+.tick {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: none;
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  border: 2px solid var(--checkbox-border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--surface);
+  font-size: 12px;
+  line-height: 16px; /* 20px box less the 2px borders — centres the tick */
   text-align: center;
+  cursor: pointer;
+
+  &:checked {
+    border-color: var(--done);
+    background: var(--done);
+  }
+
+  &:checked::after {
+    content: '✓';
+  }
+}
+
+.dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+/* No `line-height` on purpose. The prototype sets none either, and the emoji
+   font's normal line box (~25px at 15px) is what makes a row 49px tall rather
+   than 44px — pinning it to 1 shortened every row and the error compounded down
+   the page (found by measuring the target, not by eye — L-011). */
+.glyph {
+  font-size: 15px;
+}
+
+.name {
+  flex: 1;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-strong);
+}
+
+.last-done {
+  font-size: 12px;
+  color: var(--text-sub);
+}
+
+.rate {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.empty-state {
   padding: 3rem 1rem;
-  color: #999;
+  text-align: center;
+  color: var(--text-faint);
 
   p {
     margin: 0;
     font-size: 1.125rem;
   }
-}
-
-// ---------------------------------------------------------------------------
-// Phase 4a — habit colour/icon. `border-left` on `.habit-item` is already the
-// status channel here (.done green / .lapsed red), so the habit's own colour
-// gets a separate dot rather than overriding it (habit-metadata CriticReview
-// R8/R16): one visual channel, one meaning.
-// ---------------------------------------------------------------------------
-
-.habit-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.habit-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.habit-icon {
-  font-size: 1rem;
-  line-height: 1;
 }

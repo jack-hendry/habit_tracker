@@ -7,6 +7,10 @@
         <p>Add a habit first.</p>
       </div>
     } @else {
+      <!-- Phase 4a: habit colour/icon identify the selected habit here only.
+           Day cells keep their status colouring untouched (habit-metadata
+           CriticReview R8). Selector and identity are ONE flex row in the
+           prototype source (calendar-redesign CriticReview R5). -->
       <div class="habit-selector">
         <label for="habit-select">Select habit:</label>
         <select
@@ -19,67 +23,66 @@
             <option [value]="habit.id">{{ iconGlyph(habit) }} {{ habit.name }}</option>
           }
         </select>
-      </div>
 
-      <!-- Phase 4a: habit colour/icon identify the selected habit here and in
-           the heading only. Day cells keep their status colouring untouched
-           (habit-metadata CriticReview R8). -->
-      @if (selectedHabit(); as habit) {
-        <div class="selected-habit">
+        @if (selectedHabit(); as habit) {
           <span class="habit-dot" [style.background-color]="colorHex(habit)"></span>
           <span class="habit-icon" aria-hidden="true">{{ iconGlyph(habit) }}</span>
           <span class="selected-habit-name">{{ habit.name }}</span>
           @if (habit.category) {
             <span class="category-chip">{{ habit.category }}</span>
           }
-        </div>
-      }
-
-      <div class="month-nav">
-        <button (click)="prevMonth()" class="nav-button">← Prev</button>
-        <h2 class="month-label">{{ monthLabel() }}</h2>
-        <button (click)="nextMonth()" class="nav-button">Next →</button>
+        }
       </div>
 
-      <div class="calendar-grid">
-        <!-- Weekday headers -->
+      <!-- Nav, both grids and the legend share ONE card (Analyst §3.2). -->
+      <div class="calendar-card">
+        <div class="month-nav">
+          <button (click)="prevMonth()" class="nav-button">← Prev</button>
+          <h2 class="month-label">{{ monthLabel() }}</h2>
+          <button (click)="nextMonth()" class="nav-button">Next →</button>
+        </div>
+
         <div class="weekday-headers">
           @for (day of weekdayHeaders; track day) {
             <div class="weekday-header">{{ day }}</div>
           }
         </div>
 
-        <!-- Calendar cells -->
-        @for (cell of monthGrid(); track $index) {
-          <div class="cell" [ngClass]="getCellClass(cell)">
-            @if (!('blank' in cell) && cell.iso) {
-              <span class="day-number">{{ cell.iso.split('-')[2] | slice: 0 : 2 }}</span>
-            }
-          </div>
-        }
-      </div>
+        <div class="calendar-grid">
+          @for (cell of monthGrid(); track $index) {
+            <div class="cell" [ngClass]="getCellClass(cell)">
+              @if (!('blank' in cell) && cell.iso) {
+                <span class="day-number">{{ dayNumber(cell.iso) }}</span>
+              }
+            </div>
+          }
+        </div>
 
-      <!-- Legend -->
-      <div class="legend">
-        <div class="legend-item">
-          <div class="legend-swatch status-done"></div>
-          <span>Done</span>
-        </div>
-        <div class="legend-item">
-          <div class="legend-swatch status-pending"></div>
-          <span>Pending</span>
-        </div>
-        <div class="legend-item">
-          <div class="legend-swatch status-missed"></div>
-          <span>Missed</span>
-        </div>
-        <div class="legend-item">
-          <div class="legend-swatch status-not-due"></div>
-          <span>Not scheduled</span>
-        </div>
-        <div class="legend-item">
-          <div class="legend-swatch status-future"></div>
-          <span>Future</span>
+        <div class="legend">
+          <div class="legend-item">
+            <div class="legend-swatch swatch-done"></div>
+            <span>Done</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-swatch swatch-pending"></div>
+            <span>Pending</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-swatch swatch-missed"></div>
+            <span>Missed</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-swatch swatch-not-due"></div>
+            <span>Not scheduled</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-swatch swatch-future"></div>
+            <span>Future</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-swatch swatch-today"></div>
+            <span>Today</span>
+          </div>
         </div>
       </div>
     }

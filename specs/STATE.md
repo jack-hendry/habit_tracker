@@ -23,7 +23,10 @@ is cleared.
    useful part.
 3. **Size budget.** When this file gets unwieldy (~300 lines), move old
    `AD` / `B` entries and closed Quick Tasks to `STATE-ARCHIVE.md`, leaving a
-   one-line stub here. **Lessons never move** — they are permanent.
+   one-line stub here. **Lesson headlines never move** — they are permanent and
+   stay in this file. Their bodies live in `LESSONS.md` (2026-08-19); that split
+   is what keeps this file inside the budget without hiding a lesson behind a
+   pointer.
 4. **Every entry is dated and says *why*, not just *what*.** A decision without
    its reasoning cannot be revisited safely.
 5. Entries are written **when the thing happens**, not reconstructed later.
@@ -36,7 +39,9 @@ code keeps the decision, nobody keeps the reason. So, in order:
 
 1. **Read the spec one more time** — `Analyst.md`, `tasks.md`, and especially
    `CriticReview.md`. The critic findings are where the lessons live.
-2. **Add the `AD` / `L` (and any `B`) entries it produced** to this file.
+2. **Add the `AD` / `L` (and any `B`) entries it produced.** `AD` and `B` go
+   in this file in full; each `L` is a one-line headline here **plus** its body
+   in `LESSONS.md`. Writing only one of the two fails the pre-push hook.
 3. **Move the folder** to `specs/archive/YYYY-MM-DD-<name>/` (the date it was
    finished) and update anything that linked to the old path.
 4. **Both changes go in the same commit.** Never a commit that moves the spec
@@ -46,24 +51,11 @@ code keeps the decision, nobody keeps the reason. So, in order:
 
 ## Decisions
 
-**AD-001 — Client-side only: localStorage, single device, no backend.**
-(2026-07-16, `ROADMAP.md`) No accounts, no server until a phase explicitly
-demands one. Buys a shippable Phase 1 in hours instead of days. Known expiry:
-Phase 5 (notifications) is the phase that forces the conversation.
+**AD-001 — Client-side only: localStorage, single device, no backend.** → moved to `STATE-ARCHIVE.md`
 
-**AD-002 — Corrupt rows are dropped, never coerced.**
-(2026-07-17, `archive/2026-07-17-habit-checklist` R3, reaffirmed
-`scheduling-streaks` R1, `habit-metadata` R7, `habit-lifecycle` R4) `isHabit`
-rejects any row with a present-but-malformed field; the row is discarded on
-load. Only *absent* fields are backfilled with defaults. Coercing corrupt data
-produces a habit that looks fine and silently reports wrong numbers — the
-worst failure mode for a tracker whose entire value is its history.
+**AD-002 — Corrupt rows are dropped, never coerced.** → moved to `STATE-ARCHIVE.md`
 
-**AD-003 — Dates are constructed as local calendar dates, never parsed from ISO.**
-(2026-07-17, `scheduling-streaks` R2/R5) `new Date(y, m-1, d)` from split
-parts, never `new Date('2026-07-17')` — the latter parses as UTC midnight, so
-in negative-offset timezones `getDay()` returns the previous weekday. One
-shared helper derives the start-of-history boundary so every derivation agrees.
+**AD-003 — Dates are constructed as local calendar dates, never parsed from ISO.** → moved to `STATE-ARCHIVE.md`
 
 **AD-004 — Derivations are live and pure, never stored.**
 (2026-07-17, Phases 2–3) Streaks, completion rate, day status and lapsed-ness
@@ -72,29 +64,11 @@ signal, so changing a habit recomputes everything with nothing to invalidate.
 Cost is trivial at this scale (`scheduling-streaks` R10) and it removes a whole
 class of stale-cache bugs.
 
-**AD-005 — History is unrepresentable in an edit patch, not stripped at runtime.**
-(2026-07-23, `habit-metadata` R1/R2) `update` takes an explicit `HabitPatch`
-type rather than `Partial<Habit>`, so `id` / `createdAt` / `completedDates` are
-a *compile* error rather than a silent runtime no-op the caller cannot see.
-Validation is atomic: any invalid key rejects the whole patch. Extended by
-AD-007.
+**AD-005 — History is unrepresentable in an edit patch, not stripped at runtime.** → moved to `STATE-ARCHIVE.md`
 
-**AD-006 — Colour never carries meaning on its own.**
-(2026-07-23, `habit-metadata` R8/R10/R16) Status owns the colour channel that
-was already encoding status (calendar day cells, the dashboard's status
-border); habit colour appears only as decoration alongside an icon and a text
-label, and moves to a different element where it would collide. Two meanings on
-one channel makes the important one unreadable.
+**AD-006 — Colour never carries meaning on its own.** → moved to `STATE-ARCHIVE.md`
 
-**AD-007 — `status` is `'active' | 'archived'`; paused is derived.**
-(2026-07-23, `habit-lifecycle` R1/R2/R5/R6, supersedes the three-value union
-proposed in `phase-4-plan.md`) Paused-right-now is fully determined by "is
-there an open `pausedRange`?", so storing it too creates two facts that drift.
-`PausedRange.to` is **exclusive** — `[from, to)` — so same-day pause/resume is
-a well-formed empty range instead of an inverted one. Archive opens a range and
-reactivate closes it, so an archived stretch accrues no missed days. Because
-`pausedRanges` determines what *was* due, it is history and stays out of
-`HabitPatch` per AD-005 — reachable only through the named transitions.
+**AD-007 — `status` is `'active' | 'archived'`; paused is derived.** → moved to `STATE-ARCHIVE.md`
 
 **AD-008 — `specs/STATE.md` is the project memory; root `STATE.md` is a
 run-marker only.** (2026-07-23) The two files had drifted into duplicate,
@@ -104,78 +78,357 @@ the `## Executing: <spec>` marker that `enforce-haiku-tasks-pretooluse.sh`
 greps for, plus a pointer here — the hook reads the repo root and is not worth
 re-pointing.
 
+**AD-009 — The redesign's visual language lives as CSS custom properties on
+`:root` in `src/styles.scss`; there is no shell-level content width.**
+(2026-07-26, `global-shell` §2.5, R10/R12) Two halves of one decision. (a)
+Colours, radii, the content padding and the font family are declared once as
+tokens — including the status accents, declared ahead of their first use so
+roadmap §1–§3 *consume* rather than re-sample them. The accepted cost is a few
+inert `:root` lines until their section lands; the alternative is three sections
+each sampling their own green. Hex literals are banned from component SCSS for
+any value that has a token. (b) The shell imposes **no** `max-width` on
+`<router-outlet>` — the prototype gives each page its own centered column
+(Dashboard 960 / Habits 1000 / Calendar 900 / Analytics 1000 / Stacks 900), so
+the width is a per-page concern. The roadmap's "~1150px shell column" was a
+paraphrase and is superseded.
+
+**AD-010 — "Completion rate" means one thing: pooled due-days.**
+(2026-08-18, `dashboard-redesign` §3.1) `HabitService.poolCounts(habits, from,
+to)` returns `{done, countable}` over an inclusive window, pooled across habits;
+the Dashboard header, the LAST 7 DAYS card and the month-over-month delta all
+divide it. This **supersedes the mean-of-per-habit-rates** the header used
+before: mean-of-rates gave a habit created yesterday the same weight as one with
+six months of history, so adding a habit moved a number that describes the past.
+The window arithmetic is `completionRate`'s contract lifted verbatim, `isDueOn`
+guard included — `dayStatus` reports `'done'` before `'not-due'`, so without the
+guard an off-schedule completion inflates the numerator alone and the header
+prints >100%. Analytics (roadmap §4) consumes the same primitive. Falls out:
+habits exist but no due day has resolved → `—`, not `100%`.
+
+**AD-011 — "Longest active streak" is the longest *running* streak, and names
+nobody when there is none.** (2026-08-18, `dashboard-redesign` §3.2, R3)
+`topCurrentStreak` reduces `currentStreak`, not `longestStreak` — *active* is
+load-bearing in the label, which is why the card can name an owner and why the
+number drops the day a streak breaks. It returns `null` rather than a
+zero-streak winner, so the card cannot credit an arbitrary habit with a streak
+of nothing. The roadmap's "aggregate `longestStreak` + owner" is superseded.
+
+**AD-012 — Perfect-days and the overall rate read `activeHabits`, so archiving edits the past.** → moved to `STATE-ARCHIVE.md`
+
+**AD-013 — The stat card is a shared component from its first use.**
+(2026-08-18, `dashboard-redesign` §3.6) `<app-stat-card>` in
+`src/app/shared/stat-card/` owns the label / value / inline-unit / sub triad and
+shows **either** a sub-line **or** a progress bar, never both. Roadmap §4 reuses
+it for the Analytics cards; building it inline on the Dashboard meant restyling
+it twice. `:host` is the card — no wrapper element — so it behaves as a grid
+item wherever it is dropped.
+
+**AD-014 — A day-strip records what happened; a rate averages obligations.**
+(`habits-redesign` §3.1) `recentStatuses` calls `dayStatus` **raw**, with no
+`isDueOn` guard — deliberately the opposite of `poolCounts` (AD-010), which must
+guard or an off-schedule tick prints `112%`. `dayStatus` reports `done` before
+`not-due`, so a day completed off-schedule or during a pause paints in the
+habit's colour. That is correct for a strip and wrong for a rate. The two look
+inconsistent and must not be unified; both are pinned by specs.
+
+**AD-015 — The 30-day strip's three cell colours, and `pending` among them.**
+(`habits-redesign` §3.1) done → the habit's hex; `missed` **and** `pending` →
+`--strip-missed` (`#e9e9e7`); `not-due` **and** `future` → `--strip-not-due`
+(`#f5f5f3`). There is **no red** in the strip — the roadmap claimed there was.
+`pending` was settled by measuring the target, not by taste: an unticked daily
+habit's final cell reads `rgb(233,233,231)` there. It also makes the strip feel
+live, filling with colour the moment the checkbox is ticked.
+
+**AD-016 — Create is a modal; edit stays inline; both render one
+`<app-habit-form>`.** (`habits-redesign` §3.5) The prototype's `+ New habit`
+button is **dead** — no handler, no modal markup — so every part of this is
+ours, and none of it is verifiable by a design check. Native `<dialog>` +
+`showModal()` for the free focus trap, `Esc` and `::backdrop`. The element is
+**always rendered and its contents gated by `@if (creating())`**, which makes
+"empty form on re-open" structural rather than a `reset()` someone must
+remember. The modal and the inline editor are mutually exclusive.
+
+**AD-017 — `HabitService.add` returns `Habit | null`.**
+(`habits-redesign` CriticReview R11) Creation is two calls — `add(name,
+schedule)` then `update(id, patch)` for the metadata — so a `void` return meant
+the create modal could collect eight fields and silently persist two. Widening
+is purely additive; every prior caller ignores the return.
+
+**AD-018 — The habit-detail month grid keeps its own palette; `missed` is grey.**
+(2026-08-18, `habit-detail` §2b, Analyst §2.9 D) `circleFor` in the prototype is
+a **second** palette over the same `dayStatus`, not a reuse of the Calendar
+page's. A missed day is `--circle-missed-bg` / `--circle-missed-text` (grey), not
+`--missed` (red). Two pages, two intents: the Calendar is a status grid across
+habits, while this is one habit's own record and the design deliberately chooses
+not to shout at you about it. Reusing `CS` here would paint a per-habit page in
+alarm colours the design drops on purpose. The Calendar page stays red — do not
+"align" them. Pinned by an acceptance criterion that asserts the missed cell is
+**not** `--missed`, because this is the kind of difference a later reader
+flattens for consistency.
+
+**AD-019 — `/habits/:id` is the first per-entity route, and it reads `habits()`,
+not `activeHabits()`.** (2026-08-18, `habit-detail` §2b, Analyst §2.9 E/F) Every
+prior route is a static path. Two consequences worth pinning: (1) an unknown or
+malformed id **redirects to `/habits`**, not to a 404 — the app has no designed
+404 page, and the `**` route already redirects rather than rendering one; (2) the
+component resolves against `habits()` so an **archived** habit's detail page
+still renders, which is what makes a deep link, or a back-button press right
+after archiving, resolve instead of bouncing. Only `/habits` filters by status.
+The route sits between `habits` and `**`: `path: 'habits'` is a full-path match
+and cannot swallow `/habits/x`, but the wildcard can.
+
+**AD-020 — Cell fills are page-scoped tokens; a status name is not a colour.**
+(2026-08-19, `calendar-redesign` CriticReview R1) `--cal-done-bg` (#dcfce7)
+and `--cal-missed-bg` (#fee2e2) exist *because* `--done-bg` (#f4fbf6) and
+`--missed-bg` (#fdf4f4) already exist and are different colours. Same status,
+same product, two values, because they do different jobs: the Dashboard's are
+pale washes behind a text row on white, the calendar's are saturated fills for
+a 52px block that must read as colour at a glance. The Analyst assumed one
+status meant one value and asserted the calendar's fills were already
+tokenised; building that would have washed every done cell to near-white while
+AC 3's raw-hex grep, the build and the suite all stayed green — a token *was*
+being used, just the wrong one. `not-due` had no token at all: its #f3f4f6 /
+#d1d5db lived only as literals inside `calendar.component.scss`. Naming a token
+after its **status** invites the collision; these are named after their
+**page**. Before reusing a status token on a new surface, compare the hexes —
+the name will not warn you (L-012's rule, one level up).
+
+**AD-021 — The prototype's dataset shape is not adopted, only its style.**
+(2026-08-19, `calendar-redesign` §3.6 + CriticReview R3) Two non-adoptions on
+one page, one rule. (a) The source's `statusOf` has a **sixth** state, `off`
+(#fafaf9 fill, #c2c6cc numeral), for real days before its dataset begins —
+in its March, `off:-20` puts days 1–20 there. `HabitService.dayStatus` folds
+"before creation" into `not-due` and keeps five `DayStatus` values; a sixth
+would mean a service change, a seventh legend item and new spec surface, for a
+state that exists only because the prototype has 126 days of history. (b)
+`Prev`/`Next` grey out at `calM === 0 / 4` in the source; `monthGrid` takes an
+arbitrary year/month with no bound, so copying that condition would cap the
+app's calendar at whatever range happened to match the fake data. Both are the
+same failure: **a prototype's data-shape artifacts are indistinguishable from
+product decisions in a screenshot.** Sample the colours, never the dataset's
+limits. The colour pair for the disabled arrows was still sampled faithfully;
+only the *condition* that switches between them was dropped.
+
+**AD-022 — A design-conformance spec asserts computed style against the
+design source.** (2026-08-19, follow-on to `calendar-redesign`)
+`*.design.spec.ts` — `src/app/calendar/calendar.design.spec.ts` is the first —
+reads `getComputedStyle` on probe elements and compares against values
+transcribed from the `.dc.html`. Three properties are load-bearing and all
+three are easy to lose: (a) expected values come from the **design source, not
+the component's SCSS** — copying the SCSS yields a change-detector that agrees
+with whatever the component happens to say and catches nothing; (b) the
+assertion reads **computed style, not stylesheet text**, because only a real
+cascade catches a rule that is correct and never fires (L-025); (c) it uses
+**probe elements carrying the component's `_ngcontent-*` attribute rather than
+seeded data**, so it is date-independent — a habit crafted to produce all five
+statuses has no past days on the 1st and no future days on the 31st. Proven by
+mutation, not by being green: pointing `--cal-done-bg` at #f4fbf6 fails it, and
+so does collapsing a day-number colour to grey. This is the mechanism that
+covers what a screenshot structurally cannot (L-026).
+
+**AD-023 — The leaderboard ranks by `lifetimeCounts`, not `completionRate`.**
+(2026-08-19, `analytics` CriticReview R1/R2) The leaderboard plan originally
+bound rows to `completionRate(habit)`, which returns `1` for a habit with no
+resolved due day — a brand-new habit would rank first at 100%, contradicting
+AD-010's `countable === 0` → `—` rule — and the fraction it returns is 0–1, not
+0–100, so binding it straight to `width:{rate}%` renders 1px-wide bars. Fixed
+by scoring each row from `HabitService.lifetimeCounts(habit)` directly:
+`countable === 0` rows render `—` with a 0-width bar and sort last regardless
+of tie order, everyone else gets `Math.round(done/countable*100)`.
+`completionRate` itself is unchanged — it is pinned by the Dashboard and
+Habit-detail specs — this is a second, per-habit caller choosing the right
+primitive instead of the closest-sounding one.
+
+**AD-024 — The bar chart and weekday "best" highlight the maximum, not "today"
+or an arbitrary tie-winner.** (2026-08-19, `analytics` §0.1, "§4's version of
+AD-011") The 14-day bar chart highlights `bb.v === mx` in the prototype — the
+tallest bar — not the current day's bar; getting this backwards produces a
+page that matches the mockup today and is wrong every other day.
+`BarChartComponent.isHighlighted` follows suit, with one deliberate deviation
+from the source: when every bar is zero, the app highlights nothing rather
+than all bars, so a habit-free window doesn't paint every column in the
+accent colour. The weekday card's "best day" pick is the same case one level
+up — earliest weekday wins a tie, matching `topCurrentStreak`'s documented
+tie rule — and a page with no resolved weekday (`bestRate === null`) names no
+best day, echoing AD-011's "returns null rather than crediting nothing."
+
+**AD-025 — Analytics needs three separate per-day derivations, not two.**
+(2026-08-19, `analytics` CriticReview R10, extends AD-014) `dailyPooledRates`
+(heatmap) is due-guarded like `poolCounts`; `dailyDoneCounts` (bar chart) is a
+raw completion tally with no `isDueOn` guard, like `recentStatuses`. Merging
+them into one per-day pass — tempting, since both walk the same date range —
+would force one of the two callers to consume the wrong semantics, which is
+exactly the unification AD-014 forbids for the day-strip vs. the rate.
+Confirmed, not new: the reasoning is now written into the Analyst directly
+instead of living only in AD-014's original context, so a future reader
+touching either derivation sees why they don't collapse.
+
+**AD-026 — `<app-heat-grid>` stays a separate component from the
+day-strip/activity-grid family.** (2026-08-19, `analytics` CriticReview R11,
+extends AD-018) The heatmap's cell shape (`rate: number | null` per day, a
+five-step colour ramp) and the day-strip family's shape (a status enum,
+per-habit colour) are different input contracts and different colour modes on
+the same "grid of days" geometry. AD-018 already established, for the
+habit-detail month grid vs. the Calendar page, that shared geometry does not
+imply a shared component when the two modes are mutually exclusive — the same
+call applies here instead of parameterising one component with a mode flag.
+
+**AD-027 — `--heat-4` and `--bar-max` are `--accent` by identity, not by a
+coincidentally equal hex.** (2026-08-19, `analytics` §6) Both tokens are
+declared as `var(--accent)` rather than a re-sampled `#0066cc` literal. They
+are the same colour because they are the same design role — the heatmap's
+topmost activity step and the bar chart's highlight are both "this is the
+accent, doing its job as the strongest signal on the page" — and aliasing
+says so in the token itself instead of leaving two literals that happen to
+agree today and can silently drift apart in a future edit.
+
+**AD-028 — Native HTML5 drag-and-drop, not Angular CDK.**
+(2026-08-21, `stacks` §3.1) Stack reordering within and between cards is
+implemented with native `draggable` attributes and `dragstart`/`dragover`/`drop`
+event listeners, not `@angular/cdk/drag-drop`. The prototype uses the same
+native APIs; `@angular/cdk` is not a project dependency and adding it for one
+page is a cost the source does not pay. Transient drag state lives in the
+component (`{ from: string | null; habitId: string }`) and is never persisted.
+
+**AD-029 — Stack colour/glyph are palette ids; the palette gains indigo,
+coffee, moon, clock.** (2026-08-21, `stacks` §3.2) `Stack.color` and
+`Stack.aglyph` store `HABIT_COLORS` and `HABIT_ICONS` ids, never raw hex or
+emoji, matching the project invariant that `Habit.color` and `Habit.icon`
+follow (AD-004 at the service level, habitat-metadata R9). Two prototype
+values fall outside the existing palette: `#6366f1` (indigo) and the three
+emoji ☕ / 🌙 / ⏰. The palette expands rather than the rule breaking:
+`HABIT_COLORS += { id: 'indigo', label: 'Indigo', hex: '#6366f1' }` and
+`HABIT_ICONS += { id: 'coffee', label: 'Coffee', glyph: '☕' }, { id: 'moon',
+label: 'Night', glyph: '🌙' }, { id: 'clock', label: 'Time', glyph: '⏰' }`.
+Additive and back-compatible — `colorOf`/`iconOf` already fall back for unknown
+ids, and existing habits gain three new icon options.
+
+**AD-030 — A habit belongs to at most one stack.**
+(2026-08-21, `stacks` §3.3) Adding a habit to stack B removes it from stack A.
+Settled by the prototype source, not invented here — `dragTo` splices from the
+origin and `addChips` filters on `!stacks.some(x => x.items.includes(k))`.
+Consequence: the Unstacked tray is the well-defined complement of the union of
+all stack `habitIds`.
+
+**AD-031 — Deleting a habit prunes it from stacks; archiving hides it.**
+(2026-08-21, `stacks` §3.4) Two distinct rules. A **deleted** habit has its id
+removed from every stack and the change persists immediately. An **archived**
+habit keeps its `id` in `habitIds`, the row does not render in `visibleHabits()`,
+and it is excluded from the "N of M done today" counts. Reactivating restores
+it to its original position. Mechanism: `StacksService` runs an `effect()` over
+`habitService.habits()` and prunes ids with no matching habit, using `untracked()`
+on reads so the write cannot re-trigger. Archived habits are still in `habits()`
+(not `activeHabits()`), so the distinction holds. Side note: `HabitService.archive()`
+opens a pause range, so an archived habit already reads `isDueOn() === false`.
+
+**AD-032 — Stack editing is inline, not modal.**
+(2026-08-21, `stacks` §3.5) The inline editor pattern follows
+`HabitFormComponent`: an `input<Stack | null>` signal gates the render, with
+`save()`/`cancel()` outputs from the form. The editor takes over the card's
+header in place of the static name/time/anchor display. Consistent with the
+house pattern; no modal primitive exists and the design provides no mockup for
+one.
+
+**AD-033 — `Model:` is a mandatory `tasks.md` step field.**
+(2026-08-21, `model-tiering` §3) Allowed values are `haiku`, `sonnet` and
+`top-level` — **never `opus`**. The mapping rule is mechanical: *a step is
+`sonnet` if and only if its `Done when` requires looking at an image; everything
+else is `haiku`.* `top-level` exists because
+`protect-spec-docs-from-subagents.sh` denies subagent writes to `tasks.md` /
+`Analyst.md` / `CriticReview.md`, so a wrap-up step cannot be delegated at all.
+Enforced by grep in the critic pass rather than by a runtime fallback, because an
+absent field silently inherits `~/.claude/settings.json` (`"model": "opus"`,
+`"effortLevel": "high"`) — the most expensive possible default — and making
+absence a *visible* defect is the entire point. The gate needs its non-zero
+guard: `steps=$(grep -c '^### Step ' tasks.md)` then
+`[ "$steps" -gt 0 ] && [ "$(grep -c '^\*\*Model:\*\*' tasks.md)" = "$steps" ]`.
+Without the guard a file whose headings sit at another level compares 0 to 0 and
+passes vacuously — which is exactly the state this spec's own `tasks.md` was in
+when the critic pass caught it.
+
+Paired change: `enforce-haiku-tasks-pretooluse.sh` now returns `ask` (not `deny`)
+when the **top-level** session runs a verification command — `npm|pnpm|yarn
+test|build|design:shot`, `ng test|build`, `scripts/design-shot.mjs` — while a
+marker is live. `ask` not `deny` so a stale marker costs one keystroke instead of
+a lockout (the B-002 failure mode). `verify_re` is anchored to a command position
+so `grep -rn "npm test" specs/` and `cat scripts/design-shot.mjs` stay allowed;
+`npm start` is deliberately unmatched because `design:shot` needs the dev server
+already running. Deny remains the fall-through, so `npm test > src/app/out.log`
+still denies. Known false negative: a wrapper prefix (`time npm test`) slips
+through — acceptable, since the decision is ASK.
+
 ## Blockers
 
-**B-001 — The Haiku-enforcement hook denied every non-`.md` edit in the repo.**
-(2026-07-23, resolved) `enforce-haiku-tasks-pretooluse.sh` fired whenever the
-string `tasks.md` appeared in the last 60 transcript lines — and merely
-*reading* `STATE.md` put it there, so unrelated Small tasks were blocked with a
-message about a spec run that was not happening. Fixed by keying the hook to an
-explicit `## Executing: <spec>` line in the root `STATE.md`, which the session
-adds when a run starts and removes when it ends. See L-004.
+**B-001 — The Haiku-enforcement hook denied every non-`.md` edit in the repo.** → moved to `STATE-ARCHIVE.md`
+
+**B-002 — The Haiku-enforcement hook was dormant for every run, shadowed by its own documentation.** → moved to `STATE-ARCHIVE.md`
+
+**B-003 — There is no keyboard or touch reordering.**
+(2026-08-21, `stacks` §3.1) Native HTML5 DnD is mouse-only. The `+ Add habit`
+chip picker provides a non-drag way to add items to a stack, so the page is not
+unusable without dragging — but reordering within or between stacks is drag-only
+and inaccessible to keyboard and touch users. Accepted cost of AD-028.
+
+**B-004 — The NOT TODAY pill's background and padding have no oracle.**
+(2026-08-21, `model-tiering` §3) The prototype writes both as bindings
+(`{{ h.ntBg }}`, `{{ h.ntPad }}`), so there is no CSS rule to transcribe and no
+value to assert. `habit-list.design.spec.ts` therefore asserts only the pill's
+literal declarations — `10px`, uppercase, `.5px` letter-spacing, `4px` radius,
+`#a3a7ad` — and those two declarations remain unverified by anything. Narrower
+than first reported: `.not-scheduled` *does* have a CSS rule
+(`habit-list.component.scss:217`); what is missing is the oracle for two of its
+declarations, not the rule. Inventing values to close the gap is the failure
+mode; the gap is recorded instead.
 
 ## Lessons
 
-*Permanent. These never move to the archive.*
+*Permanent — these never move to `STATE-ARCHIVE.md`.* Headlines live here
+so they are always in front of whoever reads this file; the full entry —
+provenance, what broke, why — is in `LESSONS.md`, one section per id.
+Adding a lesson means adding **both**: the headline here and the body
+there. `scripts/clean-table-check.sh` refuses a push where the two
+disagree.
 
-**L-001 — A duplicated fact is a bug with a delay on it.**
-(`habit-lifecycle` R1) `status: 'paused'` alongside `pausedRanges` would have
-needed a sync obligation on every transition, and the failure mode was silent:
-`'active'` with an open range is a habit that looks healthy and is never due
-again. Prefer deriving over storing; prefer unrepresentable over "we remember
-to check".
-
-**L-002 — Push guarantees into the type system; runtime strips hide the error.**
-(`habit-metadata` R1) A runtime strip of `completedDates` makes the dangerous
-call compile, run, and appear to work. A narrowed patch type makes it a red
-squiggle at the call site. When both are available, the type is strictly
-better — and a runtime strip *on top of* a good type only masks a real compile
-error.
-
-**L-003 — "Retains history" and "fabricates failure" look identical until you
-walk the dates.** (`habit-lifecycle` R6) Reactivating a habit archived six
-months earlier would have replayed those months as due-and-uncompleted:
-streak destroyed, rate tanked, lapsed on arrival. The plan said "retains
-history" and meant it. Whenever a feature reopens a time range, ask what the
-live derivations will say about the gap.
-
-**L-004 — A guard-rail keyed to a fuzzy signal fails open *and* closed.**
-(B-001) Grepping the transcript for `tasks.md` blocked innocent work while
-still not proving a run was in flight. An enforcement hook needs an explicit,
-deliberately-set marker — if the signal can be tripped by reading a file, it is
-not a signal.
-
-**L-005 — Write `tasks.md` for the executor, who has no other context.**
-(`TEMPLATE.md`) Steps are planned on a large model and run on Haiku, which sees
-only the step in front of it. Pointing at `Analyst.md` does not count; anchor
-by symbol name rather than line number; keep the build green at every step.
-
-**L-006 — A "switch every consumer to X" instruction reads as done when it is
-half-done.** (`habit-lifecycle` R9/R10) Each dashboard bucket wanted a
-*different* answer for paused habits (`doneToday` includes them; `todoToday`
-does not), and a missed call site is a silently wrong number rather than a
-crash. Enumerate the call sites in the step, and add a `grep` as a mechanical
-completeness check.
-
-**L-007 — Order the clauses that cannot change the answer anyway, and say why.**
-(`habit-lifecycle` R8, Phase 3 R1) `isDueOn` checks start-date → pause →
-schedule. All three return `false`, so order does not change the result — but
-it is the first thing a reader checks when a day renders wrong, so it is worth
-specifying.
-
-**L-008 — Name the accepted downside so it is a decision, not an oversight.**
-(`habit-lifecycle` R15) Pause preserves a streak, so a user can protect a
-streak by pausing instead of doing the habit. Accepted deliberately — pause
-exists so the app does not punish a legitimate absence, and every anti-abuse
-rule is a product policy nobody asked for. Written down precisely so the next
-person does not "fix" it.
-
-**L-009 — Verify the migration is number-preserving before claiming it is
-additive.** (`habit-lifecycle` R7, `habit-metadata` R6) The `startDate`
-backfill was checked call site by call site against the expression it replaced
-(`createdIso`) — same value, five call sites, no other consumers — which is
-what let the slice skip a `STORAGE_KEY` bump and demand bit-identical numbers.
-Corollary: delete the old helper, don't leave two ways to compute one boundary.
+- **L-001** — A duplicated fact is a bug with a delay on it.
+- **L-002** — Push guarantees into the type system; runtime strips hide the error.
+- **L-003** — "Retains history" and "fabricates failure" look identical until you walk the dates.
+- **L-004** — A guard-rail keyed to a fuzzy signal fails open *and* closed.
+- **L-005** — Write `tasks.md` for the executor, who has no other context.
+- **L-006** — A "switch every consumer to X" instruction reads as done when it is half-done.
+- **L-007** — Order the clauses that cannot change the answer anyway, and say why.
+- **L-008** — Name the accepted downside so it is a decision, not an oversight.
+- **L-009** — Verify the migration is number-preserving before claiming it is additive.
+- **L-010** — An acceptance criterion that contradicts the body of its own spec gets implemented as written.
+- **L-011** — Verify design values against the committed mockup's pixels, not against the eye.
+- **L-012** — A value you did not sample is a value you invented.
+- **L-013** — The executor stopping is the process working, not the process failing.
+- **L-014** — A screenshot of an empty store verifies nothing.
+- **L-015** — A prototype's interactive surface is invisible in its screenshots.
+- **L-016** — Re-run a delegated step's own "Done when"; do not trust the report.
+- **L-017** — Predict the assertions, not the `it` count.
+- **L-018** — A stop clause is not a substitute for opening the file.
+- **L-019** — Prove the guard fires before trusting the run it guards.
+- **L-020** — Splitting a `tasks.md` deletes the file a hook keys on.
+- **L-021** — Fixing an unsatisfiable check can reproduce the same defect.
+- **L-022** — A route parameter read from `snapshot` pins a reused component.
+- **L-023** — A `DO NOT TOUCH` enforced by `git diff` cannot see a revert.
+- **L-024** — A named assertion can still be hollow.
+- **L-025** — A rule with the right token can still lose to the rule above it.
+- **L-026** — A design screenshot only checks the states its seed happens to render.
+- **L-027** — A second pass must re-open the source, not re-read the spec.
+- **L-028** — A guard keyed to one tool's input shape is not a guard on the action.
+- **L-029** — A verification step's mechanism must be checked against what it's checking, not assumed to see it.
+- **L-030** — A mutation check against already-sorted data can pass with the comparator deleted.
+- **L-031** — A design check whose state coverage depends on the weekday is a defective gate.
+- **L-032** — A spec whose name claims more than its assertions check.
+- **L-033** — A descendant selector written against a sibling class is dead and invisible to every gate.
+- **L-034** — An orphaned SCSS rule marks an element the template forgot to render.
+- **L-035** — The design-shot composite's resolution caps what can be verified visually.
+- **L-036** — `getComputedStyle` in ChromeHeadless at dpr 1 rounds fractional border widths.
+- **L-037** — `tasks.md` prose goes stale when an approved mid-run change invalidates a step's stated expectation.
+- **L-038** — The status-line model is the session's *configured* model, not the serving model of a running subagent.
+- **L-039** — A probe assertion on a value the prototype data-binds looks like coverage and tests nothing.
+- **L-040** — A step's `Done when` can name a file the step is forbidden to touch.
 
 ## Quick Tasks
 
@@ -187,8 +440,16 @@ Corollary: delete the old helper, don't leave two ways to compute one boundary.
 | design-compare tooling | ✓ Done | `scripts/design-shot.mjs`, `npm run design:shot`, `/design-check`. Playwright screenshot → composite beside `design/target/<name>.png`. Tooling only |
 | Fix the Haiku-enforcement hook | ✓ Done | See B-001 / L-004 |
 | Consolidate the two `STATE.md` files | ✓ Done | See AD-008 |
-| Replace the literal NUL byte in `habit-list.component.ts`'s `UNCATEGORISED` sentinel with a `\0` escape | 📋 Open | git treats the file as binary and `grep` skips it (found during 4b) |
+| Replace the literal NUL byte in `habit-list.component.ts`'s `UNCATEGORISED` sentinel with a `\0` escape | ✓ Done | Closed by `habit-detail` run 1, Step 1. File now reports as text and `grep` sees it (L-016) |
 | Split `HabitListComponent` | 📋 Open | Its SCSS is 7.82 kB against a 6 kB warn budget, and 4c will add more to the same file |
+| Demo-data seeding for design checks | ✓ Done | `scripts/demo-data.mjs` (six habits, 126 days, the prototype's own LCG) + `scripts/seed-demo.mjs` + `--seed` on `design-shot.mjs`. Tooling only — nothing under `src/` imports it. See L-014 |
+| Split `HabitListComponent` (SCSS over budget) | ✓ Done | Closed by `habits-redesign` — extracting `<app-habit-form>` and `<app-day-strip>` took the file from 7.82 kB (1.82 kB over the 6 kB warn, 2.18 kB from the 10 kB **error**) to no warning at all. It was not a tidy-up: the row restyle could not land until it did |
+| Tokenise the 29 pre-AD-009 hex literals in the edit form | ✓ Done | `habits-redesign` Step 7b. `#ccc`/`#555`/`#222`/`#f0f0f0` predated the redesign palette entirely; extracting the form into `shared/habit-form/` is what made them visible. See L-016 |
+| Back-fill component coverage for pause / resume / archive / reactivate / delete-confirm | ✓ Done | `habits-redesign` CriticReview R1 left the five lifecycle transitions untested at the component level (the service-level state machine was already covered by the Phase 4b block). Closed 2026-08-19: 18 specs added to `habit-list.component.spec.ts`, suite 218 → 236, one file, no source change. Three blocks — the two-click delete latch (component-only state the service knows nothing about), the R11/R12 editor-closing guards on `remove`/`archive`/`reactivate`, and DOM-click wiring for Pause/Resume/Archive/Reactivate. Every guard test is **paired with its negative half** per L-024 (closes the editor over its own habit *and* leaves one over a different habit alone); both guards were mutation-checked by deleting them — each deletion fails exactly one test and the negative half correctly stays green. Unblocks `TEMPLATE.md` rule 3 for lifecycle `Assumes:` entries; rule 2 (no shared file) still forces two habit-list-internal steps sequential, so the win is cross-component groups |
+| Add a habit-detail route (roadmap §2b) | ✓ Done | Closed by `habit-detail` (Large, 2 runs). `/habits/:id` exists and the habit name on `/habits` is now a `routerLink` — added **last**, in run 2 Step 12, because adding it before the route existed would have sent every click through `**` to the Dashboard. See AD-019 |
+| **`isLapsed` makes "Overdue / slipping" useless once history exists** | 📋 Open | Found by the §1 design check, **not** introduced by it. `isLapsed` = "≥1 missed day ever", so after a few weeks *every* habit qualifies: the section listed all six demo habits, three of them labelled "last done today". The target shows one. The prototype's rule is "not done today **and** last done ≥2 days ago" (`!doneToday && lastAgo >= 2`). Deliberately left alone — bucket definitions were out of scope for `dashboard-redesign` (§4) and this changes behaviour, not appearance. Sized **Small** (one computed, `dashboard.component.ts`) if adopted |
+| Parallel-execution rules for `tasks.md` | ✓ Done | `TEMPLATE.md`: `Depends on` now states *why* (the field that decides parallelisability), a "What the critic pass verifies" section (open the file, do not trust the plan — precedent R11 / L-018), and a worktree protocol. Two steps parallelise only if neither depends on the other **and** their `Files` lists share no file — git merges non-overlapping edits to one file without a conflict. Pre-merge `git diff --name-only` scope check catches the undeclared edit; sound here because a worktree branch has a committed baseline, the thing L-023 lacked. Green-build rule moved to the merge point. `CLAUDE.md` cross-ref + a commit carve-out for throwaway worktree branches. Rule 3 adds an `Assumes:` field, required only for steps in a parallel group: each behavioural assumption must name the test pinning it, so the merge-point suite catches a violation — an assumption merely *declared* enforces nothing. No such test ⇒ adding it is a prerequisite step. Docs only |
+| Fix `design-shot.mjs` dpr mismatch | ✓ Done | Both `browser.newPage()` calls (capture + composite) now pass `deviceScaleFactor: 2`, matching the dpr-2 `design/target/*.png` files. Before, captures defaulted to dpr 1 and the composite downscaled both halves, so sub-2px detail was unresolvable in every page's design check, not just stacks' (L-035). `design/actual/stacks.png` now captures at 2880×1800 instead of 1440×900; re-shot and confirmed the composite still renders correctly. One file (`scripts/design-shot.mjs`) |
 
 ---
 
@@ -203,15 +464,46 @@ Corollary: delete the old helper, don't leave two ways to compute one boundary.
 | **4b** | Habit lifecycle (start date, pause, archive, reactivate, delete-confirm) | ✅ Done | `archive/2026-07-23-habit-lifecycle/` |
 | **4c** | Completion types (count / duration / numeric / checklist, storage v2) | 📋 Planned | — (see `phase-4-plan.md`) |
 | **5** | Notifications (time-based reminders, PWA) | 📋 Planned | — |
+| **R0** | Redesign §0 — global shell (top bar, tokens, 2 stub routes) | ✅ Done, unmerged | `archive/2026-07-26-global-shell/` |
+| **R1** | Redesign §1 — Dashboard (4 stat cards, `<app-stat-card>`, row restyle) | ✅ Done, uncommitted | `archive/2026-08-18-dashboard-redesign/` |
+| **R2** | Redesign §2 — Habits (row restyle, `<app-day-strip>`, `<app-habit-form>`, create modal) | ✅ Done, unmerged | `archive/2026-08-19-habits-redesign/` |
+| **R2b** | Redesign §2b — Habit detail page (**new**, missed by the original roadmap pass) | ✅ Done, uncommitted — 163 → **218** tests | `archive/2026-08-18-habit-detail/` (Large, split into 2 runs) |
+| **R3** | Redesign §3 — Calendar (one card, per-status day numbers, Today ring) | ✅ Done, unmerged — 236 → **251** tests | `archive/2026-08-19-calendar-redesign/` |
+| **R4** | Redesign §4 — Analytics (stat row, heatmap, leaderboard, bar chart, weekday card) | ✅ Done, uncommitted — 251 → **339** tests | `archive/2026-08-20-analytics/` |
+| **R5** | Redesign §5 — Stacks (**new page**) | ✅ Done — 339 → **404** tests | `archive/2026-08-21-stacks/` |
 | — | Angular 17 → 21 upgrade (four major hops) | ✅ Done | `archive/2026-07-17-upgrade-angular-21/` |
 
 ## Notes
 
-- Router: `/` = Dashboard, `/habits` = Manage, `/calendar` = per-habit monthly view.
+- Router: `/` = Dashboard, `/habits` = Manage, `/calendar` = per-habit monthly
+  view, `/analytics` + `/stacks` = redesign stubs (roadmap §4/§5 replace them),
+  `**` → Dashboard.
 - Service derivations: `dayStatus`, `completionRate`, `isLapsed`, `monthGrid`,
   `isDueOn`, `currentStreak`, `longestStreak` — all pure, all live (AD-004).
-- Test baseline after 4b: **107** passing
-  (`npx ng test --watch=false --browsers=ChromeHeadless`).
+- Test baseline after redesign §1 (`dashboard-redesign`): **134** passing
+  (`npx ng test --watch=false --browsers=ChromeHeadless`). Was 115 after §0
+  (itself 107 after 4b); §1 added 11 service specs, 3 stat-card specs and 5
+  Dashboard specs.
+- New service derivations from §1, all pure and live (AD-004): `poolCounts`,
+  `perfectDays`, `topCurrentStreak`, `dueTodayCounts`, `earliestStartIso`, and
+  the `shiftIso` date helper.
+- Test baseline after redesign §2 (`habits-redesign`): **163** passing (was 134).
+  §2 added `recentStatuses` (the one new derivation — pure, AD-004/AD-014), the
+  page's **first** component specs, and specs for two new shared components.
+- Shared components now: `<app-stat-card>` (§1), `<app-day-strip>` (§2, takes
+  `statuses` + `hex`), `<app-habit-form>` (§2, `[habit]` null = create),
+  `<app-heat-grid>` (§4, `rate: number | null` per day, five-step ramp),
+  `<app-bar-chart>` (§4, highlights the max value, not "today" — AD-024). §2b
+  re-uses `day-strip` at a longer window.
+- New service derivations from §4, all pure and live (AD-004):
+  `dailyPooledRates`, `dailyDoneCounts`, `weekdayRates`, `lifetimeCounts`,
+  `activityWindowDays`.
+- Test baseline after redesign §4 (`analytics`): **339** passing (was 251).
+- **The prototype has six pages, not five.** The sixth (habit detail) is reached
+  by clicking a habit's *name* on `/habits`. Roadmap §2b. See L-015.
+- Design comparison needs `DESIGN_BASE_URL` when port 4200 is taken by another
+  project: `DESIGN_BASE_URL=http://localhost:4300 npm run design:shot -- <name>`
+  against `npx ng serve --port 4300`. See L-011.
 - 4c is the slice that bumps `STORAGE_KEY` to v2 — deliberately not done earlier
   (`habit-metadata` R6), so the one-way migration is spent on a settled model.
 - See `ROADMAP.md` for the product vision, `phase-4-plan.md` for the 4a/4b/4c

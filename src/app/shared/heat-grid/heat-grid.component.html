@@ -1,0 +1,20 @@
+<div class="heat-grid-container">
+  <!-- Month labels row -->
+  <div class="labels" [style.grid-template-columns]="'repeat(' + columnCount() + ', 13px)'">
+    @for (label of monthLabels(); track label.column) {
+      <span class="label" [style.grid-column]="label.column">
+        {{ label.label }}
+      </span>
+    }
+  </div>
+
+  <!-- Heat grid cells -->
+  <div class="grid">
+    @for (rate of rates(); track $index) {
+      <span
+        [class]="'cell ' + stepClass(rate)"
+        [style.background]="'var(' + stepFor(rate) + ')'"
+      ></span>
+    }
+  </div>
+</div>

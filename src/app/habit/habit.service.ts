@@ -24,6 +24,26 @@ export class HabitService {
   readonly activeHabits = computed(() => this._habits().filter((h) => h.status !== 'archived'));
 
   /**
+   * Distinct categories in use from active habits only, deduped
+   * **case-insensitively** so "Health" and "health" are one entry, keeping the
+   * first-seen casing (CriticReview R5). Archived habits do not contribute to
+   * the filter dropdown (R10 — leaving an archived habit's category there means
+   * it lingers forever in the dropdown).
+   */
+  readonly categories = computed(() => {
+    const seen = new Map<string, string>();
+    for (const habit of this.activeHabits()) {
+      if (habit.category) {
+        const key = habit.category.toLowerCase();
+        if (!seen.has(key)) {
+          seen.set(key, habit.category);
+        }
+      }
+    }
+    return [...seen.values()].sort((a, b) => a.localeCompare(b));
+  });
+
+  /**
    * Today's calendar date as `YYYY-MM-DD` in the user's **local** timezone.
    * Deliberately not `toISOString()`, which is UTC and would misattribute
    * evening/early-morning completions to the wrong day.
@@ -66,10 +86,10 @@ export class HabitService {
   }
 
   /** Add a habit. Empty/whitespace names and empty `weekdays` schedules are rejected. */
-  add(name: string, schedule: Schedule = { type: 'daily' }): void {
+  add(name: string, schedule: Schedule = { type: 'daily' }): Habit | null {
     const trimmed = name.trim();
     if (!trimmed || !isSchedule(schedule)) {
-      return;
+      return null;
     }
     const now = new Date();
     const habit: Habit = {
@@ -82,6 +102,7 @@ export class HabitService {
     };
     this._habits.update((list) => [...list, habit]);
     this.persist();
+    return habit;
   }
 
   /**
@@ -437,6 +458,187 @@ export class HabitService {
   }
 
   /**
+   * The `YYYY-MM-DD` `days` calendar days after `iso` (negative counts back).
+   * Timezone-safe: built from split parts, never parsed from the ISO string
+   * (AD-003). Public because the Dashboard derives its stat windows from it.
+   */
+  static shiftIso(iso: string, days: number): string {
+    const [y, m, d] = iso.split('-').map(Number);
+    return HabitService.todayIso(new Date(y, m - 1, d + days));
+  }
+
+  /**
+   * The earliest start date across `habits`, or null for an empty list. Used as
+   * the lower bound of "all history" windows so the caller never has to guess
+   * one (an unguarded loop bound is a hung tab, not a test failure —
+   * dashboard-redesign CriticReview R11).
+   */
+  earliestStartIso(habits: Habit[]): string | null {
+    if (habits.length === 0) {
+      return null;
+    }
+    return habits
+      .map((h) => HabitService.startIso(h))
+      .reduce((min, iso) => (iso < min ? iso : min));
+  }
+
+  /**
+   * Pooled completion counts over the inclusive window `[fromIso, toIso]`,
+   * across all of `habits`. One definition of "completion rate" for the whole
+   * Dashboard (Analyst §3.1): the caller divides `done / countable` and decides
+   * what `countable === 0` should render as.
+   *
+   * Same contract as `completionRate`, pooled: numerator = due days that are
+   * `done`; denominator = due days that are `done` or `missed`. A `pending`
+   * today is in neither — the day is not over.
+   *
+   * The `isDueOn` guard must stay ahead of the `dayStatus` call: `dayStatus`
+   * reports `'done'` before `'not-due'`, so an off-schedule completion would
+   * otherwise inflate the numerator alone (CriticReview R1).
+   */
+  poolCounts(
+    habits: Habit[],
+    fromIso: string,
+    toIso: string,
+    today: Date = new Date(),
+  ): { done: number; countable: number } {
+    let done = 0;
+    let countable = 0;
+    if (habits.length === 0 || !ISO_DATE.test(fromIso) || !ISO_DATE.test(toIso)) {
+      return { done, countable };
+    }
+
+    let cursor = fromIso;
+    while (cursor <= toIso) {
+      for (const habit of habits) {
+        if (this.isDueOn(habit, cursor)) {
+          const status = this.dayStatus(habit, cursor, today);
+          if (status === 'done') {
+            done++;
+            countable++;
+          } else if (status === 'missed') {
+            countable++;
+          }
+        }
+      }
+      cursor = HabitService.nextIso(cursor);
+    }
+
+    return { done, countable };
+  }
+
+  /**
+   * The length of the Sunday-aligned 18-week window ending today. 17 full weeks
+   * plus the current partial week means the window's first day is always a
+   * Sunday, which is what makes the 7-row grid's rows align to weekdays.
+   * Range is 120–126.
+   */
+  activityWindowDays(today: Date = new Date()): number {
+    return 17 * 7 + new Date(today).getDay() + 1;
+  }
+
+  /**
+   * Completion counts for a single habit across its entire lifetime (from start
+   * date to today). Uses the standard due-day contract: numerator = due days
+   * that are `done`; denominator = due days that are `done` or `missed`.
+   * If the habit has no resolved due day, returns `{ done: 0, countable: 0 }`.
+   */
+  lifetimeCounts(habit: Habit, today: Date = new Date()): { done: number; countable: number } {
+    const fromIso = this.earliestStartIso([habit]);
+    if (fromIso === null) {
+      return { done: 0, countable: 0 };
+    }
+    return this.poolCounts([habit], fromIso, HabitService.todayIso(today), today);
+  }
+
+  /**
+   * Completion counts for a single habit within a specific calendar month,
+   * clamped at today (so a mid-month `today` does not count the rest of the
+   * month as missed). Month is 0-based (JS convention, matching `monthGrid`).
+   * If the whole month is in the future, `from > to` and `poolCounts` returns
+   * zeros — that is correct, not a case to special-case.
+   */
+  monthToDateCounts(habit: Habit, year: number, month: number, today: Date = new Date()): { done: number; countable: number } {
+    const firstOfMonth = HabitService.todayIso(new Date(year, month, 1));
+    const lastOfMonth = HabitService.todayIso(new Date(year, month + 1, 0));
+    const todayIso = HabitService.todayIso(today);
+    const toIso = todayIso < lastOfMonth ? todayIso : lastOfMonth;
+    return this.poolCounts([habit], firstOfMonth, toIso, today);
+  }
+
+  /**
+   * Days on which **at least one** habit was due and **every** habit that was
+   * due was completed, from the earliest start date through today inclusive.
+   *
+   * The `anyDue` guard is what stops a day where nothing was scheduled from
+   * counting as a triumph. Today counts only if everything due today is already
+   * done — there is no grace, because a day that counts before it is finished
+   * would tick back down at midnight (Analyst §3.3).
+   */
+  perfectDays(habits: Habit[], today: Date = new Date()): number {
+    const fromIso = this.earliestStartIso(habits);
+    if (fromIso === null) {
+      return 0;
+    }
+    const toIso = HabitService.todayIso(today);
+
+    let count = 0;
+    let cursor = fromIso;
+    while (cursor <= toIso) {
+      let anyDue = false;
+      let allDone = true;
+      for (const habit of habits) {
+        if (this.isDueOn(habit, cursor)) {
+          anyDue = true;
+          if (!habit.completedDates.includes(cursor)) {
+            allDone = false;
+          }
+        }
+      }
+      if (anyDue && allDone) {
+        count++;
+      }
+      cursor = HabitService.nextIso(cursor);
+    }
+    return count;
+  }
+
+  /**
+   * The habit with the longest **currently running** streak, with that streak.
+   * Returns null when no habit has one — the card must then show `0 days` with
+   * no owner rather than crediting whichever habit happens to sort first
+   * (dashboard-redesign CriticReview R3). Ties keep the earlier habit.
+   */
+  topCurrentStreak(
+    habits: Habit[],
+    today: Date = new Date(),
+  ): { habit: Habit; streak: number } | null {
+    let best: { habit: Habit; streak: number } | null = null;
+    for (const habit of habits) {
+      const streak = this.currentStreak(habit, today);
+      if (streak > 0 && (best === null || streak > best.streak)) {
+        best = { habit, streak };
+      }
+    }
+    return best;
+  }
+
+  /**
+   * How many habits are **due** today and how many of those are done. Both
+   * numbers come from the due-today set on purpose: `doneToday` on the
+   * Dashboard also lists habits ticked off-schedule (habit-lifecycle R9), and
+   * counting those would print "6 of 5 done" (Analyst §3.5).
+   */
+  dueTodayCounts(habits: Habit[], today: Date = new Date()): { due: number; done: number } {
+    const todayIso = HabitService.todayIso(today);
+    const dueHabits = habits.filter((h) => this.isDueOn(h, todayIso));
+    return {
+      due: dueHabits.length,
+      done: dueHabits.filter((h) => h.completedDates.includes(todayIso)).length,
+    };
+  }
+
+  /**
    * True iff there is ≥1 missed day in [startDate .. yesterday]. A pending
    * today does NOT make a habit lapsed (CriticReview R4). Short-circuits on the
    * first missed day.
@@ -467,6 +669,145 @@ export class HabitService {
     }
     // Lexical max works for zero-padded YYYY-MM-DD strings
     return habit.completedDates.reduce((max, date) => (date > max ? date : max));
+  }
+
+  /**
+   * Day statuses for the `days`-day window ending today (inclusive), oldest
+   * first. Drives the 30-day strip on the Habits page (§2) and the heatmap in
+   * §4.
+   *
+   * Deliberately calls `dayStatus` with **no `isDueOn` guard**, unlike
+   * `poolCounts` (habits-redesign CriticReview R4). `dayStatus` reports 'done'
+   * before 'not-due', so a day completed off-schedule or during a pause paints
+   * as done — which is right for a record of what happened, and wrong for a
+   * rate. The two must not be unified.
+   */
+  recentStatuses(habit: Habit, days: number, today: Date = new Date()): DayStatus[] {
+    const todayIso = HabitService.todayIso(today);
+    const result: DayStatus[] = [];
+    for (let offset = days - 1; offset >= 0; offset--) {
+      result.push(this.dayStatus(habit, HabitService.shiftIso(todayIso, -offset), today));
+    }
+    return result;
+  }
+
+  /**
+   * Pooled completion rate per day for the trailing window ending today, oldest
+   * first. Each entry is the pool's completion rate (done/countable) for that
+   * day's habits, or `null` if nothing was due on that day.
+   *
+   * The distinction between `null` and `0` is deliberate: a day on which nothing
+   * was due is not a day on which everything was missed. The analytics heatmap
+   * needs this to distinguish "no data" from "complete failure" (AD-010). Call
+   * `poolCounts(habits, iso, iso, today)` once per day to avoid restating its
+   * contract in a second place (L-001).
+   *
+   * Returns `[]` when `days <= 0`. An empty `habits` array yields all `null`.
+   */
+  dailyPooledRates(
+    habits: Habit[],
+    days: number,
+    today: Date = new Date(),
+  ): Array<number | null> {
+    if (days <= 0) {
+      return [];
+    }
+    const todayIso = HabitService.todayIso(today);
+    const result: Array<number | null> = [];
+    for (let offset = days - 1; offset >= 0; offset--) {
+      const iso = HabitService.shiftIso(todayIso, -offset);
+      const { done, countable } = this.poolCounts(habits, iso, iso, today);
+      result.push(countable === 0 ? null : done / countable);
+    }
+    return result;
+  }
+
+  /**
+   * Raw completion count per day for the trailing window ending today, oldest
+   * first. Each entry counts habits whose `completedDates` includes that day's
+   * ISO, regardless of whether the habit was due on that day.
+   *
+   * Deliberately **not** the same shape as `dailyPooledRates`: this counts
+   * *what happened* (off-schedule ticks included), while rates count *what was
+   * owed* (due-day guard enforced). The two must not be unified — they serve
+   * different purposes and feed different charts (AD-014).
+   *
+   * Returns `[]` when `days <= 0`.
+   */
+  dailyDoneCounts(
+    habits: Habit[],
+    days: number,
+    today: Date = new Date(),
+  ): number[] {
+    if (days <= 0) {
+      return [];
+    }
+    const todayIso = HabitService.todayIso(today);
+    const result: number[] = [];
+    for (let offset = days - 1; offset >= 0; offset--) {
+      const iso = HabitService.shiftIso(todayIso, -offset);
+      let count = 0;
+      for (const habit of habits) {
+        if (habit.completedDates.includes(iso)) {
+          count++;
+        }
+      }
+      result.push(count);
+    }
+    return result;
+  }
+
+  /**
+   * Pooled completion rate per weekday across all history (from earliest start
+   * date through today inclusive). Returns exactly 7 entries indexed
+   * `Sun = 0 … Sat = 6`, each the completion rate for that weekday or `null` if
+   * nothing was ever due on that weekday.
+   *
+   * The distinction between `null` and `0` is deliberate: a weekday on which
+   * nothing was ever due is not a weekday on which every due completion was
+   * missed. Accumulates `poolCounts` per day into each day's weekday bucket
+   * (Analyst §3.6).
+   *
+   * Extracts the weekday with the house split-parts construction:
+   * `const [y, m, d] = iso.split('-').map(Number); new Date(y, m - 1, d).getDay()`.
+   * Never `new Date(iso).getDay()` — that parses as UTC and shifts the weekday
+   * for half the world (AD-003, CriticReview R5).
+   *
+   * Returns seven `null`s when `habits` is empty or `earliestStartIso` is null.
+   */
+  weekdayRates(
+    habits: Habit[],
+    today: Date = new Date(),
+  ): Array<number | null> {
+    const fromIso = this.earliestStartIso(habits);
+    if (fromIso === null) {
+      return [null, null, null, null, null, null, null];
+    }
+
+    const todayIso = HabitService.todayIso(today);
+    const buckets: Array<{ done: number; countable: number }> = [
+      { done: 0, countable: 0 },
+      { done: 0, countable: 0 },
+      { done: 0, countable: 0 },
+      { done: 0, countable: 0 },
+      { done: 0, countable: 0 },
+      { done: 0, countable: 0 },
+      { done: 0, countable: 0 },
+    ];
+
+    let cursor = fromIso;
+    while (cursor <= todayIso) {
+      const [y, m, d] = cursor.split('-').map(Number);
+      const weekday = new Date(y, m - 1, d).getDay();
+
+      const { done, countable } = this.poolCounts(habits, cursor, cursor, today);
+      buckets[weekday].done += done;
+      buckets[weekday].countable += countable;
+
+      cursor = HabitService.nextIso(cursor);
+    }
+
+    return buckets.map((b) => (b.countable === 0 ? null : b.done / b.countable));
   }
 
   /**

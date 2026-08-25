@@ -1,19 +1,22 @@
 .calendar-container {
   max-width: 900px;
   margin: 0 auto;
-  padding: 2rem 1rem;
+  padding: var(--content-pad);
 }
 
-.calendar-header {
-  h1 {
-    margin-top: 0;
-  }
+.calendar-header h1 {
+  margin: 0 0 18px;
+  font-size: 23px;
+  letter-spacing: -0.3px;
+  color: var(--text-strong);
 }
 
+// No mockup exists for the empty state (the prototype always has data). Only
+// the hardcoded grey is changed, so AC 3's hex grep passes (CriticReview R13).
 .empty-state {
   text-align: center;
   padding: 3rem 1rem;
-  color: #999;
+  color: var(--text-sub);
 
   p {
     margin: 0;
@@ -21,208 +24,243 @@
   }
 }
 
+// One row: label, select, dot, glyph, name, category chip (CriticReview R5).
 .habit-selector {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin-bottom: 2rem;
+  gap: 12px;
+  margin-bottom: 16px;
 
   label {
-    font-weight: 500;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--cal-label);
   }
 
   .select {
-    padding: 0.5rem;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    font-size: 1rem;
+    padding: 8px 10px;
+    background: var(--surface);
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-control);
+    font-size: 13px;
+    font-family: inherit;
+    color: var(--text-strong);
   }
-}
-
-.month-nav {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2rem;
-
-  .nav-button {
-    padding: 0.5rem 1rem;
-    background-color: #f0f0f0;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: 500;
-
-    &:hover {
-      background-color: #e0e0e0;
-    }
-  }
-
-  .month-label {
-    margin: 0;
-    font-size: 1.25rem;
-  }
-}
-
-.calendar-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
-  background-color: #e0e0e0;
-  padding: 2px;
-  border-radius: 4px;
-  margin-bottom: 2rem;
-}
-
-.weekday-headers {
-  display: contents;
-}
-
-.weekday-header {
-  background-color: #f0f0f0;
-  padding: 0.75rem;
-  text-align: center;
-  font-weight: bold;
-  border-radius: 0;
-}
-
-.cell {
-  background-color: white;
-  min-height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.5rem;
-  border-radius: 2px;
-  cursor: default;
-  position: relative;
-
-  .day-number {
-    font-size: 0.875rem;
-    color: #666;
-    position: absolute;
-    top: 4px;
-    right: 4px;
-  }
-
-  &.blank {
-    background-color: #fafafa;
-  }
-
-  &.status-done {
-    background-color: #dcfce7;
-    border-left: 4px solid #22c55e;
-  }
-
-  &.status-pending {
-    background-color: #fef3c7;
-    border-left: 4px solid #f59e0b;
-  }
-
-  &.status-missed {
-    background-color: #fee2e2;
-    border-left: 4px solid #ef4444;
-  }
-
-  &.status-not-due {
-    background-color: #f3f4f6;
-    border-left: 4px solid #d1d5db;
-  }
-
-  &.status-future {
-    background-color: #e0e7ff;
-    border-left: 4px solid #6366f1;
-  }
-}
-
-.legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1.5rem;
-  padding: 1.5rem;
-  background-color: #f9f9f9;
-  border-radius: 4px;
-  border: 1px solid #e0e0e0;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-
-  .legend-swatch {
-    width: 24px;
-    height: 24px;
-    border-radius: 2px;
-    border: 1px solid #ccc;
-  }
-
-  .status-done {
-    background-color: #dcfce7;
-    border-color: #22c55e;
-  }
-
-  .status-pending {
-    background-color: #fef3c7;
-    border-color: #f59e0b;
-  }
-
-  .status-missed {
-    background-color: #fee2e2;
-    border-color: #ef4444;
-  }
-
-  .status-not-due {
-    background-color: #f3f4f6;
-    border-color: #d1d5db;
-  }
-
-  .status-future {
-    background-color: #e0e7ff;
-    border-color: #6366f1;
-  }
-
-  span {
-    font-size: 0.875rem;
-    color: #666;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Phase 4a — selected-habit identity strip. Colour/icon appear here and in the
-// selector only; `.cell` status colouring is deliberately untouched
-// (habit-metadata CriticReview R8).
-// ---------------------------------------------------------------------------
-
-.selected-habit {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin: 0.75rem 0;
 }
 
 .habit-dot {
-  width: 12px;
-  height: 12px;
+  width: 11px;
+  height: 11px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
 .habit-icon {
-  font-size: 1.1rem;
+  font-size: 14px;
   line-height: 1;
 }
 
 .selected-habit-name {
-  font-weight: 600;
-  color: #333;
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-strong);
 }
 
 .category-chip {
-  background-color: #eee;
-  padding: 0.15rem 0.5rem;
-  border-radius: 999px;
-  color: #444;
-  font-size: 0.8rem;
+  background: var(--chip-bg);
+  color: var(--text);
   font-weight: 500;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  font-size: 11.5px;
+}
+
+// Nav, both grids and the legend live in ONE card (Analyst §3.2). The 10px
+// radius is --radius-card-lg, shared with habit-detail — not --radius-card.
+.calendar-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card-lg);
+  padding: 18px 20px;
+}
+
+.month-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+
+  // No hover rule: the source has none, and the old grey hover fights the
+  // white rest state (CriticReview R12). Prev/Next are never disabled — the
+  // prototype's grey-out is an artifact of its 5-month fake dataset and is
+  // deliberately not adopted (Analyst §3.6).
+  .nav-button {
+    padding: 6px 12px;
+    background: var(--surface);
+    border: 1px solid var(--control-border);
+    border-radius: var(--radius-control);
+    font-size: 12px;
+    font-family: inherit;
+    color: var(--text);
+    cursor: pointer;
+  }
+
+  .month-label {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-strong);
+  }
+}
+
+// Two sibling grids with different bottom margins, not one grid with
+// `display: contents` (CriticReview R7).
+.weekday-headers {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.weekday-header {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  padding: 4px 0;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 14px;
+}
+
+// Three properties per status, not two: background, border-left AND the day
+// number's own colour (Analyst §3.3, CriticReview's corrected cell table).
+.cell {
+  min-height: 52px;
+  border-radius: 4px;
+  position: relative;
+
+  .day-number {
+    position: absolute;
+    top: 5px;
+    right: 7px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  // Padding cells are fully transparent in the source — which is also why
+  // monthGrid's trailing blanks (the prototype generates none) are invisible
+  // rather than a row of grey tiles (CriticReview R2).
+  &.blank {
+    background: transparent;
+    border-left: 3px solid transparent;
+  }
+
+  &.status-done {
+    background: var(--cal-done-bg);
+    border-left: 3px solid var(--done);
+
+    .day-number {
+      color: var(--done-text);
+    }
+  }
+
+  &.status-pending {
+    background: var(--pending-bg);
+    border-left: 3px solid var(--pending);
+
+    .day-number {
+      color: var(--pending-text);
+    }
+  }
+
+  &.status-missed {
+    background: var(--cal-missed-bg);
+    border-left: 3px solid var(--missed);
+
+    .day-number {
+      color: var(--cal-missed-text);
+    }
+  }
+
+  &.status-not-due {
+    background: var(--cal-not-due-bg);
+    border-left: 3px solid var(--cal-not-due);
+
+    .day-number {
+      color: var(--cal-not-due-text);
+    }
+  }
+
+  &.status-future {
+    background: var(--cal-future-bg);
+    border-left: 3px solid var(--cal-future);
+
+    .day-number {
+      color: var(--cal-future-text);
+    }
+  }
+
+  // Orthogonal to status (Analyst §3.5). A box-shadow, not a border: a border
+  // would shift the cell's contents by its width.
+  &.today {
+    box-shadow: 0 0 0 2px var(--accent);
+  }
+}
+
+.legend {
+  display: flex;
+  gap: 16px;
+  font-size: 11.5px;
+  color: var(--text-sub);
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+// No box-sizing here on purpose: with no global reset, the 2px Today swatch
+// renders 18x18 against the others' 16x16, which is what the source and the
+// mockup show (CriticReview R13).
+.legend-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+}
+
+.swatch-done {
+  background: var(--cal-done-bg);
+  border: 1px solid var(--done);
+}
+
+.swatch-pending {
+  background: var(--pending-bg);
+  border: 1px solid var(--pending);
+}
+
+.swatch-missed {
+  background: var(--cal-missed-bg);
+  border: 1px solid var(--missed);
+}
+
+.swatch-not-due {
+  background: var(--cal-not-due-bg);
+  border: 1px solid var(--cal-not-due);
+}
+
+.swatch-future {
+  background: var(--cal-future-bg);
+  border: 1px solid var(--cal-future);
+}
+
+.swatch-today {
+  background: var(--surface);
+  border: 2px solid var(--accent);
 }

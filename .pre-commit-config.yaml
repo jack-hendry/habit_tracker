@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: clean-table-check
+        name: clean table check (archive gate + summary gate)
+        entry: scripts/clean-table-check.sh
+        language: script
+        pass_filenames: false
+        stages: [pre-push]

@@ -1,0 +1,119 @@
+@if (habit(); as h) {
+  <section class="hero" [style.background]="heroTint()">
+    <div class="hero-inner">
+      <a class="back-link" routerLink="/habits">← All habits</a>
+
+      <div class="hero-row">
+        <div class="streak-block">
+          <div class="streak-number">{{ currentStreak() }}</div>
+          <div class="streak-label">day streak 🔥</div>
+        </div>
+
+        <div class="hero-rule"></div>
+
+        <div class="icon-tile" aria-hidden="true">{{ glyph() }}</div>
+
+        <div class="identity">
+          <h1 class="habit-name">{{ h.name }}</h1>
+          <p class="habit-meta">{{ metaLine() }}</p>
+        </div>
+
+        <div class="hero-stats">
+          <div class="stat">
+            <div class="stat-value">{{ completionPct() === null ? '—' : completionPct() + '%' }}</div>
+            <div class="stat-label">completion</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value">{{ completions() }}</div>
+            <div class="stat-label">completions</div>
+          </div>
+          <div class="stat">
+            <div class="stat-value">{{ bestStreak() }}</div>
+            <div class="stat-label">best streak</div>
+          </div>
+        </div>
+
+        <div class="hero-actions">
+          <button type="button" class="hero-button" (click)="openEdit()">Edit</button>
+          <button type="button" class="hero-button" (click)="archive()">Archive</button>
+        </div>
+      </div>
+    </div>
+  </section>
+  <div class="body">
+    <section class="card activity-card">
+      <div class="card-heading">
+        <div class="card-title">Activity</div>
+        <div class="card-sub">18 weeks</div>
+      </div>
+      <app-activity-grid [statuses]="activityStatuses()" [hex]="hex()" />
+    </section>
+
+    <div class="card-row">
+      <section class="card month-card">
+        <div class="month-head">
+          <button type="button" class="month-arrow" [disabled]="!canGoPrev()" (click)="prevMonth()">‹</button>
+          <span class="month-label">{{ monthLabel() }}</span>
+          <button type="button" class="month-arrow" [disabled]="!canGoNext()" (click)="nextMonth()">›</button>
+        </div>
+
+        <div class="weekday-row">
+          @for (initial of weekdayInitials; track $index) {
+            <span class="weekday">{{ initial }}</span>
+          }
+        </div>
+
+        <div class="month-grid">
+          @for (cell of monthCells(); track $index) {
+            @if ($any(cell).blank) {
+              <span class="cell-blank"></span>
+            } @else {
+              <span
+                class="circle"
+                [class]="'circle status-' + $any(cell).status"
+                [style.background]="$any(cell).status === 'done' ? hex() : null"
+              >{{ +$any(cell).iso.slice(-2) }}</span>
+            }
+          }
+        </div>
+      </section>
+
+      <section class="card summary-card">
+        <div class="card-title">{{ monthShortLabel() }} so far</div>
+
+        <div class="summary-row">
+          <span class="row-label">Days completed</span>
+          <span class="row-value">{{ monthCounts().done }} of {{ monthCounts().countable }}</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" [style.width.%]="monthPct()" [style.background]="hex()"></div>
+        </div>
+
+        <div class="summary-row divided">
+          <span class="row-label">Current streak</span>
+          <span class="row-value streak-value">{{ currentStreak() }} days 🔥</span>
+        </div>
+        <div class="summary-row">
+          <span class="row-label">Best streak ever</span>
+          <span class="row-value">{{ bestStreak() }} days</span>
+        </div>
+        <div class="summary-row">
+          <span class="row-label">Today</span>
+          <span class="row-value today-value" [class]="'today-value today-' + todayState()">{{ todayLabel() }}</span>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <dialog #editDialog class="edit-dialog" (close)="closeEdit()">
+    @if (editing()) {
+      <h2 class="dialog-title">Edit habit</h2>
+      <app-habit-form
+        [habit]="h"
+        [categories]="categories()"
+        (save)="saveEdit($event)"
+        (cancel)="closeEdit()"
+      />
+    }
+  </dialog>
+}

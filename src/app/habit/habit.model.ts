@@ -116,6 +116,7 @@ export const HABIT_COLORS: readonly HabitColor[] = [
   { id: 'violet', label: 'Violet', hex: '#8b5cf6' },
   { id: 'teal', label: 'Teal', hex: '#14b8a6' },
   { id: 'orange', label: 'Orange', hex: '#f97316' },
+  { id: 'indigo', label: 'Indigo', hex: '#6366f1' },
 ];
 
 /** Fixed icon set. First entry is the default (used for no icon / unknown id). */
@@ -132,6 +133,9 @@ export const HABIT_ICONS: readonly HabitIcon[] = [
   { id: 'money', label: 'Money', glyph: '💰' },
   { id: 'clean', label: 'Chores', glyph: '🧹' },
   { id: 'heart', label: 'Health', glyph: '❤️' },
+  { id: 'coffee', label: 'Coffee', glyph: '☕' },
+  { id: 'moon', label: 'Night', glyph: '🌙' },
+  { id: 'clock', label: 'Time', glyph: '⏰' },
 ];
 
 /**
@@ -141,6 +145,19 @@ export const HABIT_ICONS: readonly HabitIcon[] = [
  */
 export function colorOf(id?: string): HabitColor {
   return HABIT_COLORS.find((c) => c.id === id) ?? HABIT_COLORS[0];
+}
+
+/**
+ * A palette hex at partial opacity, as `rgba(r,g,b,a)`. The habit-detail hero
+ * band (§2b) tints itself with the habit's own colour at 9% — the tint is
+ * derived per habit, never a fixed value (roadmap §2b Critic Review).
+ *
+ * `hex` is always a 6-digit `#rrggbb` from `HABIT_COLORS`; this is not a general
+ * CSS colour parser.
+ */
+export function hexAlpha(hex: string, alpha: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
 }
 
 /** Resolve a stored icon id. Same fallback contract as `colorOf`. */

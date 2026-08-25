@@ -12,7 +12,7 @@ if echo "$prompt" | grep -qiE 'tasks\.md' && \
   jq -n '{
     hookSpecificOutput: {
       hookEventName: "UserPromptSubmit",
-      additionalContext: "Reminder (from CLAUDE.md): steps from tasks.md must be implemented by delegating to a subagent via the Agent tool with model: \"haiku\" — do not implement them directly in this top-level session."
+      additionalContext: "Reminder (from CLAUDE.md): steps from tasks.md must be implemented by delegating to a subagent via the Agent tool, using the model named in that step'"'"'s Model: field — do not implement them directly in this top-level session."
     }
   }'
 fi

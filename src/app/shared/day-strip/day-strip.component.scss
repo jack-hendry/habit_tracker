@@ -1,0 +1,26 @@
+/* Sampled from the prototype source (Analyst §2.3). 30 × 8px + 29 × 2px =
+   298px, confirmed by measuring design/target/habits.png. */
+.day-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+}
+
+.cells {
+  display: flex;
+  gap: 2px;
+}
+
+.cell {
+  width: 8px;
+  height: 22px;
+  border-radius: 2px;
+}
+
+.strip-label {
+  font-size: 9.5px;
+  color: var(--text-faint);
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}

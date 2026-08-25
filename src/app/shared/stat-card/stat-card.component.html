@@ -1,0 +1,16 @@
+<span class="stat-label">{{ label() }}</span>
+<span class="stat-value"
+  >{{ value() }}@if (unit(); as u) {<span class="stat-unit"> {{ u }}</span>}</span
+>
+@if (progress() !== null) {
+  <div class="stat-track" aria-hidden="true">
+    <div class="stat-fill" [style.width.%]="progress()"></div>
+  </div>
+} @else if (sub(); as s) {
+  <span
+    class="stat-sub"
+    [class.positive]="tone() === 'positive'"
+    [class.negative]="tone() === 'negative'"
+    >{{ s }}</span
+  >
+}

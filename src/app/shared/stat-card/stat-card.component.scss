@@ -1,0 +1,59 @@
+/* :host IS the card — no wrapper element, so the card is the grid item its
+   parent lays out. Colours come from the tokens in styles.scss (AD-009). */
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+
+.stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.stat-value {
+  font-size: 23px;
+  font-weight: 700;
+  color: var(--text-strong);
+}
+
+.stat-unit {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+
+.stat-sub {
+  font-size: 12px;
+  color: var(--text-sub);
+
+  &.positive {
+    color: var(--positive);
+    font-weight: 600;
+  }
+
+  &.negative {
+    color: var(--danger-text);
+    font-weight: 600;
+  }
+}
+
+.stat-track {
+  height: 6px;
+  background: var(--track);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.stat-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+}

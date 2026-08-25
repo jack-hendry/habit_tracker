@@ -1,1 +1,131 @@
-/* You can add global styles to this file, and also import other style files */
+/* ---------------------------------------------------------------------------
+   Design tokens — the single source of truth for the redesign's visual
+   language (specs/global-shell/Analyst.md §2.5). Values sampled from the
+   Claude Design prototype source, not eyeballed. Components consume these; no
+   hard-coded hex belongs in a component's SCSS for a value that has a token.
+   --------------------------------------------------------------------------- */
+:root {
+  /* Surfaces & text */
+  --page-bg: #f7f7f5;
+  --surface: #fff;
+  --border: #e8e8e6;
+  --text-strong: #16181c;
+  --text: #4c5057;
+  --text-muted: #8a8f96;
+  --nav-inactive: #565b63;
+
+  /* Accent */
+  --accent: #0066cc;
+  --accent-tint: #e9f1fa;
+
+  /* Controls */
+  --chip-bg: #f1f1ef;
+  --control-border: #d7d7d4;
+  --checkbox-border: #c9cdd2;
+
+  /* Radii */
+  --radius-card: 8px;
+  --radius-control: 6px;
+  --radius-pill: 999px;
+
+  /* Layout */
+  --content-pad: 28px 24px 48px;
+
+  /* Typography */
+  --font-sans: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+
+  /* Status accents — declared ahead of first use so roadmap §1–§3 consume
+     rather than re-sample them (Analyst §2.5, CriticReview R10). Unused in
+     Phase 0 by design. */
+  --done: #22c55e;
+  --done-bg: #f4fbf6;
+  --done-border: #e2f0e6;
+  --done-text: #166534;
+  --missed: #ef4444;
+  --missed-bg: #fdf4f4;
+  --missed-border: #f3dede;
+  --danger-text: #c92a2a;
+  --danger-border: #eec4c4;
+  --pending: #f59e0b;
+  --pending-bg: #fef3c7;
+  --pending-text: #92400e;
+  --row-neutral: #dcdcd9;
+
+  /* Dashboard §1 — sub-text, empty copy, section rule, progress track, and the
+     "improved" green. `--positive` is deliberately NOT `--done`: `--done` fills
+     a control and a border where it reads as status (AD-006), while this is
+     12px text on white and needs the darker value to stay legible
+     (dashboard-redesign CriticReview R6). */
+  --text-sub: #75797f;
+  --text-faint: #a3a7ad;
+  --rule: #efefec;
+  --track: #eef0f2;
+  --positive: #2f9e44;
+
+  /* Habits §2 — the streak accent, the two 30-day-strip greys, the NOT TODAY
+     pill, and the modal backdrop. The three near-greys (--pill-muted-bg,
+     --strip-not-due and --chip-bg #f1f1ef) appear on the same row and are
+     three different sampled values: do not collapse them (L-012).
+     --backdrop is the one INVENTED value in this slice — no mockup exists for
+     the modal (Analyst §3.5 D) — and is a token rather than an inline rgba()
+     so AC 3's grep can see it (CriticReview R6). */
+  --streak: #e8590c;
+  --strip-missed: #e9e9e7;
+  --strip-not-due: #f5f5f3;
+  --pill-muted-bg: #f4f4f2;
+  --backdrop: rgba(0, 0, 0, 0.32);
+
+  /* Habit detail §2b — sampled from the prototype's `isGoal` block. The cards
+     use a 10px radius, not --radius-card's 8px: a real per-page difference.
+     --circle-missed-* is the month grid's GREY miss — the Calendar page's red
+     --missed is deliberately not reused here (Analyst §2.9 D). --card-divider
+     is #f0f0ee and --rule is #efefec: two sampled near-greys, not one (L-012). */
+  --radius-card-lg: 10px;
+  --circle-missed-bg: #f0f1f3;
+  --circle-missed-text: #8a93a1;
+  --text-ghost: #c2c6cc;
+  --arrow-disabled: #d5d5d2;
+  --card-divider: #f0f0ee;
+  --hero-rule: rgba(0, 0, 0, 0.12);
+  --hero-tile-border: rgba(0, 0, 0, 0.1);
+
+  /* Calendar §3 — the day-grid palette. Deliberately NOT the dashboard's
+     --done-bg / --missed-bg (#f4fbf6 / #fdf4f4): those are pale row tints
+     behind a list row, these are saturated fills for a 52px cell
+     (CriticReview R1). There is no --cal-off-*: the prototype's sixth 'off'
+     state (pre-history days) has no DayStatus in this app and is deliberately
+     not adopted (R3). --cal-label is a fourth near-grey, distinct from
+     --text / --nav-inactive / --text-sub — do not collapse them (L-012). */
+  --cal-label: #3a3f45;
+  --cal-done-bg: #dcfce7;
+  --cal-missed-bg: #fee2e2;
+  --cal-missed-text: #991b1b;
+  --cal-not-due: #d1d5db;
+  --cal-not-due-bg: #f3f4f6;
+  --cal-not-due-text: #9aa1ab;
+  --cal-future: #8f95e8;
+  --cal-future-bg: #e7eaff;
+  --cal-future-text: #4338ca;
+
+  /* Analytics §4 — chart palette (roadmap §4). --heat-4 and --bar-max are
+     --accent by identity, not coincidence; both are the heatmap's topmost step
+     and the bar chart's highlight colour. Sampled from the prototype
+     (lines 179–246, 453–474). */
+  --heat-0: #ebedf0;
+  --heat-1: #c7dcf1;
+  --heat-2: #7fb0de;
+  --heat-3: #3c87cd;
+  --heat-4: var(--accent);
+  --bar-max: var(--accent);
+  --bar-rest: #bdd6ee;
+  --bar-label: #9aa0a8;
+}
+
+/* `margin: 0` makes the sticky bar genuinely full-bleed; the background is on
+   `body` as well as the shell wrapper so a short page shows gray, not white,
+   on overscroll (CriticReview R2). */
+body {
+  margin: 0;
+  background: var(--page-bg);
+  font-family: var(--font-sans);
+}
