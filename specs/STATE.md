@@ -448,6 +448,7 @@ disagree.
 - **L-039** — A probe assertion on a value the prototype data-binds looks like coverage and tests nothing.
 - **L-040** — A step's `Done when` can name a file the step is forbidden to touch.
 - **L-041** — A check that computes its own diff range is only as trustworthy as that range, and a new environment silently changes it.
+- **L-042** — The empty-tree fallback made the archive gate pass on exactly the push it exists to block.
 
 ## Quick Tasks
 

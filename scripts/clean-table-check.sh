@@ -64,10 +64,21 @@ else
   if git rev-parse --verify --quiet "origin/${BRANCH}" >/dev/null; then
     RANGE="origin/${BRANCH}..HEAD"
   else
-    # No upstream yet (first push of a new branch) — diff against the empty
-    # tree so every committed file reads as newly added.
-    EMPTY_TREE="$(git hash-object -t tree /dev/null)"
-    RANGE="${EMPTY_TREE}..HEAD"
+    # No upstream yet — the first push of a new branch. Diffing against the
+    # empty tree here reads EVERY tracked file as newly added, specs/STATE.md
+    # included, which satisfies the archive gate no matter what the branch
+    # actually did and lets exactly the bad push this script exists to stop
+    # sail through. Use the merge base with the default branch instead: what
+    # the branch adds on top of main is what is being pushed.
+    DEFAULT_REF="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD || echo origin/main)"
+    if MERGE_BASE="$(git merge-base "$DEFAULT_REF" HEAD 2>/dev/null)"; then
+      RANGE="${MERGE_BASE}..HEAD"
+    else
+      # Genuinely unrelated history (no default branch, or nothing in common)
+      # — the empty tree is the only honest answer left.
+      EMPTY_TREE="$(git hash-object -t tree /dev/null)"
+      RANGE="${EMPTY_TREE}..HEAD"
+    fi
   fi
 fi
 
