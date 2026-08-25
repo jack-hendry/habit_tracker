@@ -1,0 +1,36 @@
+name: CI
+
+# Defense in depth. The clean-table check already runs as a local pre-push hook
+# (.pre-commit-config.yaml), but a local hook can be skipped with
+# `git push --no-verify`. CI runs the same script, and CI cannot be skipped.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - run: npm test -- --watch=false --browsers=ChromeHeadless
+        env:
+          CHROME_BIN: /usr/bin/google-chrome
+
+  clean-table-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the script needs git history to compute the diff range
+      - run: bash scripts/clean-table-check.sh
+        env:
+          # github.event.before is only set on push events; the script ignores
+          # it on pull_request and uses GITHUB_BASE_REF instead.
+          BEFORE_SHA: ${{ github.event.before }}
