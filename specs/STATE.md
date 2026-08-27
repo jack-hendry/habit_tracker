@@ -140,23 +140,7 @@ is purely additive; every prior caller ignores the return.
 
 **AD-033 — `Model:` is a mandatory `tasks.md` step field.** → moved to `STATE-ARCHIVE.md`
 
-**AD-034 — CI runs the same `clean-table-check.sh` as the pre-push hook.**
-(2026-08-25, Part 4 of the config homework) The pre-push hook is a client-side
-git hook, so `git push --no-verify` bypasses it completely — it is a reminder
-for the honest case, not a guarantee. `.github/workflows/ci.yml` therefore runs
-the *identical script*, not a reimplementation of its rules, on `pull_request`
-and on `push` to `main`. Two jobs: `tests` (`npm ci` + the Karma suite on
-ChromeHeadless) and `clean-table-gate` (the script). One script and two callers
-is the whole point — a second copy of the rules in YAML would drift from the
-hook, and then the two would disagree about what "clean" means.
-
-The script had to learn where it is running, because it computes its own diff
-range and the range *is* the check (see L-041). Precedence, most specific
-first: `RANGE_OVERRIDE` (testing) → `GITHUB_BASE_REF` (pull request) →
-`GITHUB_EVENT_NAME=push` with `BEFORE_SHA` from `github.event.before` (push) →
-the original local-branch logic. `checkout` needs `fetch-depth: 0` or there is
-no history to diff against, and on a pull request it fetches only the PR ref, so
-the script fetches the base branch itself before taking the merge base.
+**AD-034 — CI runs the same `clean-table-check.sh` as the pre-push hook.** → moved to `STATE-ARCHIVE.md`
 
 ## Blockers
 
@@ -240,6 +224,8 @@ disagree.
 | **`isLapsed` makes "Overdue / slipping" useless once history exists** | 📋 Open | Found by the §1 design check, **not** introduced by it. `isLapsed` = "≥1 missed day ever", so after a few weeks *every* habit qualifies: the section listed all six demo habits, three of them labelled "last done today". The target shows one. The prototype's rule is "not done today **and** last done ≥2 days ago" (`!doneToday && lastAgo >= 2`). Deliberately left alone — bucket definitions were out of scope for `dashboard-redesign` (§4) and this changes behaviour, not appearance. Sized **Small** (one computed, `dashboard.component.ts`) if adopted |
 | Parallel-execution rules for `tasks.md` | ✓ Done | `TEMPLATE.md`: `Depends on` now states *why* (the field that decides parallelisability), a "What the critic pass verifies" section (open the file, do not trust the plan — precedent R11 / L-018), and a worktree protocol. Two steps parallelise only if neither depends on the other **and** their `Files` lists share no file — git merges non-overlapping edits to one file without a conflict. Pre-merge `git diff --name-only` scope check catches the undeclared edit; sound here because a worktree branch has a committed baseline, the thing L-023 lacked. Green-build rule moved to the merge point. `CLAUDE.md` cross-ref + a commit carve-out for throwaway worktree branches. Rule 3 adds an `Assumes:` field, required only for steps in a parallel group: each behavioural assumption must name the test pinning it, so the merge-point suite catches a violation — an assumption merely *declared* enforces nothing. No such test ⇒ adding it is a prerequisite step. Docs only |
 | Fix `design-shot.mjs` dpr mismatch | ✓ Done | Both `browser.newPage()` calls (capture + composite) now pass `deviceScaleFactor: 2`, matching the dpr-2 `design/target/*.png` files. Before, captures defaulted to dpr 1 and the composite downscaled both halves, so sub-2px detail was unresolvable in every page's design check, not just stacks' (L-035). `design/actual/stacks.png` now captures at 2880×1800 instead of 1440×900; re-shot and confirmed the composite still renders correctly. One file (`scripts/design-shot.mjs`) |
+| Two more gates on the run marker | ✓ Done | 2026-08-27, from `BACKLOG.md`. `enforce-haiku-tasks-pretooluse.sh` now **asks** on (a) `git commit`/`git push` from the top-level session while `## Executing:` is live — the marker said "mid-run" and nothing acted on it — and (b) an `Agent`/`Task` dispatch with `model: opus` or no `model`, which `TEMPLATE.md` forbids for a step (absent inherits opus/high, the priciest default). ASK not DENY: a checkpoint commit before a worktree merge and a deliberate one-off are both legitimate, and deny-with-no-override is the fail-closed half of B-001. Matched `Task` alongside `Agent` per L-028. The per-step half of the model check was dropped as unimplementable — nothing in an Agent call names its step (see `BACKLOG.md`). Matcher widened in `.claude/settings.json`; 24 cases added to the hook's test matrix, including a dormant-cwd block pinning both gates *below* the marker check |
+| Surface `git push --no-verify` | ✓ Done | 2026-08-27, from `BACKLOG.md`. New always-on `.claude/hooks/warn-push-bypass.sh` asks before a push carrying `--no-verify`, closing the gap CLAUDE.md names in prose ("a reminder for the honest case, not a guarantee"). Deliberately **not** keyed to the run marker — most pushes happen outside a run — and **not** exempt for subagents. Excludes `-n`, which on a push is `--dry-run` and runs no hooks anyway. Value is bounded: CI runs the same script on every PR and push to `main`, so this only saves the round-trip. Own test matrix (`warn-push-bypass.test.sh`), incl. the `grep -n no-verify CLAUDE.md` false positive an unanchored pattern would cause |
 
 ---
 

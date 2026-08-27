@@ -327,6 +327,24 @@ already running. Deny remains the fall-through, so `npm test > src/app/out.log`
 still denies. Known false negative: a wrapper prefix (`time npm test`) slips
 through — acceptable, since the decision is ASK.
 
+**AD-034 — CI runs the same `clean-table-check.sh` as the pre-push hook.**
+(2026-08-25, Part 4 of the config homework) The pre-push hook is a client-side
+git hook, so `git push --no-verify` bypasses it completely — it is a reminder
+for the honest case, not a guarantee. `.github/workflows/ci.yml` therefore runs
+the *identical script*, not a reimplementation of its rules, on `pull_request`
+and on `push` to `main`. Two jobs: `tests` (`npm ci` + the Karma suite on
+ChromeHeadless) and `clean-table-gate` (the script). One script and two callers
+is the whole point — a second copy of the rules in YAML would drift from the
+hook, and then the two would disagree about what "clean" means.
+
+The script had to learn where it is running, because it computes its own diff
+range and the range *is* the check (see L-041). Precedence, most specific
+first: `RANGE_OVERRIDE` (testing) → `GITHUB_BASE_REF` (pull request) →
+`GITHUB_EVENT_NAME=push` with `BEFORE_SHA` from `github.event.before` (push) →
+the original local-branch logic. `checkout` needs `fetch-depth: 0` or there is
+no history to diff against, and on a pull request it fetches only the PR ref, so
+the script fetches the base branch itself before taking the merge base.
+
 ## Blockers
 
 **B-001 — The Haiku-enforcement hook denied every non-`.md` edit in the repo.**

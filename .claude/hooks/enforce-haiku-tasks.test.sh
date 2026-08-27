@@ -114,10 +114,63 @@ run "bare npm start"       ALLOW Bash '{"command":"npm start"}'
 run "npm run watch"        ALLOW Bash '{"command":"npm run watch"}'
 run "test harness itself"  ALLOW Bash '{"command":"./.claude/hooks/enforce-haiku-tasks.test.sh"}'
 
+echo "== git commit/push during a run must ASK =="
+run "git commit -m"          ASK Bash '{"command":"git commit -m \"wip\""}'
+run "git commit -am"         ASK Bash '{"command":"git commit -am \"wip\""}'
+run "git push"               ASK Bash '{"command":"git push"}'
+run "git push -u origin br"  ASK Bash '{"command":"git push -u origin feature/x"}'
+run "git -C path commit"     ASK Bash '{"command":"git -C .claude/worktrees/a commit -m x"}'
+run "chained && git commit"  ASK Bash '{"command":"npm test && git commit -m ok"}'
+# The marker means "mid-run", not "no git at all" -- reads must stay clear, and
+# a mention of the words inside a quoted argument is not a command position.
+run "git status"             ALLOW Bash '{"command":"git status --short"}'
+run "git log"                ALLOW Bash '{"command":"git log --oneline -5"}'
+run "git diff --name-only"   ALLOW Bash '{"command":"git diff --name-only main..HEAD"}'
+run "grep for git commit"    ALLOW Bash '{"command":"grep -rn \"git commit\" specs/"}'
+run "git add"                ALLOW Bash '{"command":"git add -A"}'
+# A subagent on its own throwaway worktree branch commits freely (CLAUDE.md).
+out=$(jq -n --arg c "$PWD" '{tool_name:"Bash",agent_id:"abc",cwd:$c,tool_input:{command:"git commit -m step-1"}}' | "$HOOK")
+if [[ -z "$out" ]]; then echo "  ok   ALLOW  subagent git commit"; else echo "  FAIL subagent git commit was blocked"; fails=$((fails+1)); fi
+
+echo "== subagent dispatch model =="
+run "Agent model haiku"   ALLOW Agent '{"model":"haiku","prompt":"step 1","subagent_type":"general-purpose"}'
+run "Agent model sonnet"  ALLOW Agent '{"model":"sonnet","prompt":"design check","subagent_type":"design-check"}'
+run "Agent model opus"    ASK   Agent '{"model":"opus","prompt":"step 1","subagent_type":"general-purpose"}'
+run "Agent no model"      ASK   Agent '{"prompt":"step 1","subagent_type":"general-purpose"}'
+run "Agent fork"          ASK   Agent '{"prompt":"step 1","subagent_type":"fork"}'
+# Same tool under its other harness name, per L-028: a guard keyed to one name
+# stops guarding the day it is renamed.
+run "Task no model"       ASK   Task  '{"prompt":"step 1","subagent_type":"general-purpose"}'
+run "Task model haiku"    ALLOW Task  '{"model":"haiku","prompt":"step 1"}'
+
 echo "== file tools: behaviour predating the Bash coverage =="
 run "Edit a source file" DENY  Edit '{"file_path":"/x/src/app/a.ts"}'
 run "Edit a .md"         ALLOW Edit '{"file_path":"/x/specs/a/tasks.md"}'
 run "Read is exempt"     ALLOW Read '{"file_path":"/x/src/styles.scss"}'
+
+echo "== dormant (no run marker) -- the new gates must not fire either =="
+# `cwd` is a hook input, so a scratch dir with a marker-less STATE.md exercises
+# the dormant path without touching the repo's own. Both gates added on
+# 2026-08-27 sit AFTER the marker check; this pins that, so a later refactor
+# that hoists one above it turns every ordinary commit and every subagent
+# dispatch in the repo into a prompt.
+dormant=$(mktemp -d)
+printf '# STATE\n\nno marker here\n' > "$dormant/STATE.md"
+dorm() { # label expected tool tool_input_json
+  local out got
+  out=$(jq -n --arg t "$3" --arg c "$dormant" --argjson ti "$4" \
+    '{tool_name:$t, cwd:$c, tool_input:$ti}' | "$HOOK")
+  if [[ -z "$out" ]]; then got=ALLOW; else
+    got=$(jq -r '.hookSpecificOutput.permissionDecision // "allow"' <<<"$out" | tr '[:lower:]' '[:upper:]'); fi
+  if [[ "$got" == "$2" ]]; then echo "  ok   $got  $1"; else
+    echo "  FAIL exp=$2 got=$got  $1"; fails=$((fails + 1)); fi
+}
+dorm "git commit, no marker"  ALLOW Bash  '{"command":"git commit -m wip"}'
+dorm "git push, no marker"    ALLOW Bash  '{"command":"git push"}'
+dorm "Agent opus, no marker"  ALLOW Agent '{"model":"opus","prompt":"anything"}'
+dorm "Agent no model, dormant" ALLOW Agent '{"prompt":"anything"}'
+dorm "Edit src, no marker"    ALLOW Edit  '{"file_path":"/x/src/app/a.ts"}'
+rm -rf "$dormant"
 
 echo "== subagents are never blocked (they ARE the delegation target) =="
 out=$(jq -n --arg c "$PWD" '{tool_name:"Bash",agent_id:"abc",cwd:$c,tool_input:{command:"sed -i \"\" s/a/b/ src/styles.scss"}}' | "$HOOK")

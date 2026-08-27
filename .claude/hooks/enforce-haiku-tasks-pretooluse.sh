@@ -13,6 +13,18 @@
 # which misfired on any incidental mention (reading STATE.md was enough) and
 # blocked unrelated Small tasks.
 #
+# Three gates, all dormant unless the run marker names a real spec triad:
+#   1. the original one -- deny a direct write to project code from the
+#      top-level session, so the step goes to its subagent instead;
+#   2. ask before `git commit` / `git push` from the top level, because the
+#      marker says the tree is mid-run (added 2026-08-27);
+#   3. ask before dispatching a subagent on opus or on no model at all, which
+#      TEMPLATE.md forbids for a step (added 2026-08-27).
+#
+# The `git push --no-verify` warning is deliberately NOT here: it belongs in
+# warn-push-bypass.sh, which is always on, because it has nothing to do with
+# whether a tasks.md run is in flight.
+#
 # Bash is covered as well as Edit/Write/MultiEdit (added 2026-08-19). It was
 # matcher-limited to the file-editing tools, and keyed off
 # `.tool_input.file_path` -- which only those tools populate. A Bash-mediated
@@ -63,29 +75,16 @@ esac
 # measures the running app is not the project code this rule exists to protect.
 protected_re='(src|scripts|\.claude/hooks)/[a-z0-9_./-]+|(angular|package|tsconfig[a-z0-9_.-]*)\.json|\.pre-commit-config\.yaml'
 
-decide() { # $1 = allow|ask|deny, $2 = target
+decide() { # $1 = allow|ask|deny, $2 = reason (ask and deny only)
   case "$1" in
     allow)
       exit 0
       ;;
-    ask)
-      local ask_reason="Verification commands like this should run inside the step's subagent (**Model: haiku** in tasks.md), not at the top level. The orchestrator's job is to read the step's report; approving once is acceptable if this is a deliberate spot check."
-      jq -n --arg reason "$ask_reason" '{
+    ask|deny)
+      jq -n --arg d "$1" --arg reason "$2" '{
         hookSpecificOutput: {
           hookEventName: "PreToolUse",
-          permissionDecision: "ask",
-          permissionDecisionReason: $reason
-        }
-      }'
-      exit 0
-      ;;
-    deny)
-      local target="$2"
-      local deny_reason='Per CLAUDE.md, implement tasks.md steps via a Haiku subagent (Agent tool, model: "haiku"), not by editing code directly from the top-level session. Active run: specs/'"$spec"' (declared by the '"'"'## Executing: '"$spec"''"'"' line in STATE.md -- remove it when the run is done). Blocked write to: '"$target"
-      jq -n --arg reason "$deny_reason" '{
-        hookSpecificOutput: {
-          hookEventName: "PreToolUse",
-          permissionDecision: "deny",
+          permissionDecision: $d,
           permissionDecisionReason: $reason
         }
       }'
@@ -94,10 +93,61 @@ decide() { # $1 = allow|ask|deny, $2 = target
   esac
 }
 
+verify_reason="Verification commands like this should run inside the step's subagent (**Model: haiku** in tasks.md), not at the top level. The orchestrator's job is to read the step's report; approving once is acceptable if this is a deliberate spot check."
+
+run_context="Active run: specs/$spec (declared by the '## Executing: $spec' line in STATE.md -- remove it when the run is done)."
+
+# --- Gate: which model a delegated step is dispatched with -------------------
+# TEMPLATE.md fixes the allowed executors globally -- haiku, sonnet, top-level,
+# NEVER opus -- and says an absent `model` makes the subagent inherit
+# ~/.claude/settings.json ("model": "opus", "effortLevel": "high"), the most
+# expensive possible default. That rule needs no step mapping, so it is checked
+# here. The other half -- "is THIS call's model the one THIS step's Model:
+# field names" -- is deliberately NOT attempted: nothing in an Agent call says
+# which step it is executing, and matching its free-text prompt against step
+# headings is exactly the fuzzy signal L-004 is about. ASK, not DENY: a
+# legitimate sonnet step and a deliberate one-off both exist.
+#
+# Task is matched alongside Agent because the delegation tool has carried both
+# names across harness versions; keying on one is a guard that silently stops
+# guarding after a rename (L-028).
+case "$tool_name" in
+  Agent|Task)
+    model=$(jq -r '.tool_input.model // empty' <<<"$input" | tr '[:upper:]' '[:lower:]')
+    subagent=$(jq -r '.tool_input.subagent_type // empty' <<<"$input")
+    case "$model" in
+      haiku|sonnet) exit 0 ;;
+    esac
+    if [[ -z "$model" ]]; then
+      model_detail="no model field, so the subagent inherits ~/.claude/settings.json (opus, high effort) -- the most expensive default"
+    else
+      model_detail="model: $model"
+    fi
+    if [[ "$subagent" == "fork" ]]; then
+      model_detail="$model_detail; subagent_type \"fork\" ignores a model override and always runs on the parent's model"
+    fi
+    decide ask "Dispatching a subagent while a tasks.md run is in flight ($model_detail). TEMPLATE.md allows haiku, sonnet or top-level for a step -- never opus -- and requires the Model: field on every step; use the model that step names. $run_context"
+    ;;
+esac
+
 if [[ "$tool_name" == "Bash" ]]; then
   command=$(jq -r '.tool_input.command // empty' <<<"$input")
   if [[ -z "$command" ]]; then
     exit 0
+  fi
+
+  # A commit or push while the run marker is live. The marker exists precisely
+  # to say "the tree is mid-run"; nothing else stopped the top-level session
+  # from committing halfway through one. ASK rather than DENY -- a checkpoint
+  # commit before merging parallel worktree branches is legitimate, and a deny
+  # with no override is the fail-closed half of B-001. Subagents never reach
+  # here (the agent_id check at the top of the file exits first), which is what
+  # preserves CLAUDE.md's carve-out for a step's throwaway worktree branch.
+  # Command-position anchored so `grep -rn "git commit" specs/` stays allowed.
+  # Known false negative: global flags other than -C (`git --no-pager commit`).
+  git_write_re='(^[[:space:]]*|[;&|(][[:space:]]*)git([[:space:]]+-C[[:space:]]+[^[:space:]]+)?[[:space:]]+(commit|push)\b'
+  if grep -qE "$git_write_re" <<<"$command"; then
+    decide ask "A tasks.md run is in flight, and this commits or pushes from the top-level session. Per CLAUDE.md every commit on the working branch needs the user's explicit permission for that specific commit; the run marker says the tree is mid-run. Approve only if this is a deliberate checkpoint (e.g. before merging worktree branches), not a side effect. $run_context Command: $command"
   fi
 
   # A verification command the ORCHESTRATOR should not be running by hand: the
@@ -116,7 +166,7 @@ if [[ "$tool_name" == "Bash" ]]; then
   # mention them constantly and must stay allowed, so this alone never blocks.
   if ! tr '[:upper:]' '[:lower:]' <<<"$command" | grep -qE "$protected_re"; then
     if [[ $is_verify -eq 1 ]]; then
-      decide ask
+      decide ask "$verify_reason"
     else
       exit 0
     fi
@@ -139,7 +189,7 @@ if [[ "$tool_name" == "Bash" ]]; then
 
   if ! grep -qE "$write_re" <<<"$command"; then
     if [[ $is_verify -eq 1 ]]; then
-      decide ask
+      decide ask "$verify_reason"
     else
       exit 0
     fi
@@ -152,4 +202,4 @@ else
   fi
 fi
 
-decide deny "$target"
+decide deny 'Per CLAUDE.md, implement tasks.md steps via a Haiku subagent (Agent tool, model: "haiku"), not by editing code directly from the top-level session. '"$run_context"' Blocked write to: '"$target"
