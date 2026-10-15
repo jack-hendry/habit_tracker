@@ -336,4 +336,74 @@ describe('DashboardComponent', () => {
       expect(c.overallCompletionRate()).toBeCloseTo(4 / 6, 3);
     });
   });
+  describe('vacation', () => {
+    const SEVEN_DAYS = 7;
+
+    function clickButton(fixture: any, selector: string, text: string): void {
+      const buttons: HTMLButtonElement[] = Array.from(fixture.nativeElement.querySelectorAll(selector));
+      const button = buttons.find((b) => b.textContent?.trim() === text);
+      expect(button).toBeDefined();
+      button!.click();
+      fixture.detectChanges();
+    }
+
+    it('shows "Vacation mode" and no banner when no vacation is set', () => {
+      const fixture = createComponent();
+      const btn: HTMLButtonElement = fixture.nativeElement.querySelector('.vacation-button');
+
+      expect(btn.textContent).toContain('Vacation mode');
+      expect(fixture.nativeElement.querySelector('.vacation-banner')).toBeNull();
+    });
+
+    it('underway: banner, "Edit vacation", "I\'m back" label, and an empty To-do with a pending habit', () => {
+      localStorage.setItem(
+        'habit_tracker.habits.v1',
+        JSON.stringify([makeHabit({ id: 'daily', name: 'Daily', completedDates: [] })]),
+      );
+      const service = TestBed.inject(HabitService);
+      expect(service.startVacation(TODAY_ISO, HabitService.shiftIso(TODAY_ISO, SEVEN_DAYS), FRI_17)).toBeTrue();
+
+      const fixture = createComponent();
+      const el: HTMLElement = fixture.nativeElement;
+
+      expect(el.querySelector('.banner-title')?.textContent).toMatch(/^On vacation · Fri, Jul 17/);
+      expect(el.querySelector('.vacation-button')?.textContent).toContain('Edit vacation');
+      expect(el.querySelector('.banner-end')?.textContent?.trim()).toBe("I'm back — end vacation");
+      expect(el.querySelector('.vacation-empty')).not.toBeNull();
+      expect(fixture.componentInstance.todoToday().length).toBe(0);
+    });
+
+    it('upcoming: "Vacation scheduled" banner, "Cancel vacation", and Cancel removes the banner', () => {
+      TestBed.inject(HabitService).startVacation(
+        HabitService.shiftIso(TODAY_ISO, 2),
+        HabitService.shiftIso(TODAY_ISO, 9),
+        FRI_17,
+      );
+
+      const fixture = createComponent();
+      const el: HTMLElement = fixture.nativeElement;
+
+      expect(el.querySelector('.banner-title')?.textContent).toContain('Vacation scheduled · ');
+      expect(el.querySelector('.banner-end')?.textContent?.trim()).toBe('Cancel vacation');
+
+      clickButton(fixture, '.banner-end', 'Cancel vacation');
+
+      expect(el.querySelector('.vacation-banner')).toBeNull();
+    });
+
+    it('"I\'m back" on a vacation started before today truncates it to end at today', () => {
+      // Seeded before the service is created: HabitService reads storage in its constructor.
+      localStorage.setItem(
+        'habit_tracker.vacations.v1',
+        JSON.stringify([{ from: HabitService.shiftIso(TODAY_ISO, -2), to: HabitService.shiftIso(TODAY_ISO, 5) }]),
+      );
+      const service = TestBed.inject(HabitService);
+
+      const fixture = createComponent();
+      clickButton(fixture, '.banner-end', "I'm back — end vacation");
+
+      expect(service.vacations()[0].to).toBe(TODAY_ISO);
+      expect(fixture.nativeElement.querySelector('.vacation-banner')).toBeNull();
+    });
+  });
 });

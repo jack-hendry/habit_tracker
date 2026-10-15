@@ -1,11 +1,26 @@
 <div class="dashboard">
   <header class="page-head">
     <h1>Dashboard</h1>
-    <div class="overall">
-      <span class="overall-label">Overall completion</span>
-      <span class="overall-value">{{ formatRate(overallCompletionRate()) }}</span>
+    <div class="head-actions">
+      <button type="button" class="vacation-button" (click)="openVacation()"><span class="palm" aria-hidden="true">🌴</span>{{ vacationButtonLabel() }}</button>
+      <div class="overall">
+        <span class="overall-label">Overall completion</span>
+        <span class="overall-value">{{ formatRate(overallCompletionRate()) }}</span>
+      </div>
     </div>
   </header>
+
+  @if (vacation()) {
+    <div class="vacation-banner">
+      <span class="banner-tile" aria-hidden="true">🌴</span>
+      <div class="banner-text">
+        <span class="banner-title">{{ bannerTitle() }}</span>
+        <span class="banner-sub">{{ bannerSub() }}</span>
+      </div>
+      <button type="button" class="banner-edit" (click)="openVacation()">Edit</button>
+      <button type="button" class="banner-end" (click)="endVacation()">{{ endLabel() }}</button>
+    </div>
+  }
 
   @if (habits().length === 0) {
     <div class="empty-state">
@@ -39,7 +54,11 @@
     <section class="section">
       <h2>To do today</h2>
       @if (todoToday().length === 0) {
-        <p class="no-items">Nothing due today!</p>
+        @if (vacationUnderway()) {
+          <p class="no-items vacation-empty">Everything's paused while you're away. Enjoy the break.</p>
+        } @else {
+          <p class="no-items">Nothing due today!</p>
+        }
       } @else {
         <div class="habit-list">
           @for (habit of todoToday(); track habit.id) {
@@ -105,4 +124,10 @@
       }
     </section>
   }
+  <dialog #vacationDialog class="vacation-dialog" (close)="closeVacation()">
+    @if (vacationOpen()) {
+      <app-vacation-dialog [today]="today" (closed)="closeVacation()" />
+    }
+  </dialog>
 </div>
+

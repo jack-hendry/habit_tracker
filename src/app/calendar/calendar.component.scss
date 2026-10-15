@@ -205,6 +205,15 @@
     }
   }
 
+  &.status-paused {
+    background: var(--paused-bg);
+    border-left: 3px solid var(--paused-border);
+
+    .day-number {
+      color: var(--paused-text);
+    }
+  }
+
   // Orthogonal to status (Analyst §3.5). A box-shadow, not a border: a border
   // would shift the cell's contents by its width.
   &.today {
@@ -258,6 +267,11 @@
 .swatch-future {
   background: var(--cal-future-bg);
   border: 1px solid var(--cal-future);
+}
+
+.swatch-paused {
+  background: var(--paused-bg);
+  border: 1px solid var(--paused-border);
 }
 
 .swatch-today {

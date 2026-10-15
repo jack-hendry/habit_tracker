@@ -1,13 +1,15 @@
-import { Component, inject, computed } from '@angular/core';
+import { Component, inject, computed, signal, viewChild, ElementRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HabitService } from '../habit/habit.service';
 import { Habit, colorOf, iconOf } from '../habit/habit.model';
 import { StatCardComponent } from '../shared/stat-card/stat-card.component';
+import { VacationDialogComponent } from './vacation-dialog/vacation-dialog.component';
+import { formatShortDate } from '../shared/format-short-date';
 
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, StatCardComponent],
+  imports: [CommonModule, StatCardComponent, VacationDialogComponent],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss',
 })
@@ -15,12 +17,52 @@ export class DashboardComponent {
   private readonly habitService = inject(HabitService);
   readonly habits = this.habitService.activeHabits;
 
-  private readonly today = new Date();
+  readonly today = new Date();
   private readonly todayIso = HabitService.todayIso(this.today);
+
+  readonly vacationOpen = signal(false);
+  private readonly vacationDialog = viewChild.required<ElementRef<HTMLDialogElement>>('vacationDialog');
+
+  /** Current-or-upcoming vacation. Reactive: reads the service signal. */
+  readonly vacation = computed(() => this.habitService.currentVacation(this.today));
+  readonly vacationUnderway = computed(() => {
+    const v = this.vacation();
+    return v !== null && v.from <= this.todayIso;
+  });
+  readonly vacationButtonLabel = computed(() => (this.vacation() ? 'Edit vacation' : 'Vacation mode'));
+  readonly bannerTitle = computed(() => {
+    const v = this.vacation();
+    if (!v) return '';
+    const span = `${formatShortDate(v.from)} – ${formatShortDate(HabitService.shiftIso(v.to, -1))}`;
+    return `${this.vacationUnderway() ? 'On vacation' : 'Vacation scheduled'} · ${span}`;
+  });
+  readonly bannerSub = computed(() => {
+    const v = this.vacation();
+    return v ? `All habits paused · streaks protected · resumes ${formatShortDate(v.to)}` : '';
+  });
+  /** Q2: "I'm back" only once underway; before that it cancels. */
+  readonly endLabel = computed(() => (this.vacationUnderway() ? "I'm back — end vacation" : 'Cancel vacation'));
+
+  openVacation(): void {
+    this.vacationOpen.set(true);
+    this.vacationDialog().nativeElement.showModal();
+  }
+
+  closeVacation(): void {
+    this.vacationOpen.set(false);
+    const el = this.vacationDialog().nativeElement;
+    if (el.open) {
+      el.close();
+    }
+  }
+
+  endVacation(): void {
+    this.habitService.endVacation(this.today);
+  }
 
   readonly todoToday = computed(() => {
     return this.habits().filter(
-      (h) => !this.habitService.isPaused(h, this.today) &&
+      (h) => !this.habitService.isManuallyPaused(h, this.today) &&
              this.habitService.dayStatus(h, this.todayIso, this.today) === 'pending'
     );
   });
@@ -42,7 +84,7 @@ export class DashboardComponent {
    */
   readonly lapsed = computed(() => {
     return this.habits().filter(
-      (h) => !this.habitService.isPaused(h, this.today) &&
+      (h) => !this.habitService.isManuallyPaused(h, this.today) &&
              this.isRecentlyLapsed(h)
     );
   });

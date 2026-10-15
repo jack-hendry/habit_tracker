@@ -1,5 +1,5 @@
 import { Injectable, signal, computed } from '@angular/core';
-import { Habit, HabitPatch, Schedule, isHabit, isSchedule, DayStatus, ISO_DATE, PausedRange } from './habit.model';
+import { Habit, HabitPatch, Schedule, isHabit, isSchedule, DayStatus, ISO_DATE, PausedRange, Vacation, isVacation } from './habit.model';
 
 /**
  * Client-side habit store, persisted to localStorage (no backend, no accounts,
@@ -12,9 +12,15 @@ import { Habit, HabitPatch, Schedule, isHabit, isSchedule, DayStatus, ISO_DATE, 
 export class HabitService {
   /** Versioned so future shape changes can migrate — legacy rows migrate in place. */
   private static readonly STORAGE_KEY = 'habit_tracker.habits.v1';
+  private static readonly VACATIONS_KEY = 'habit_tracker.vacations.v1';
 
   private readonly _habits = signal<Habit[]>(this.load());
   readonly habits = this._habits.asReadonly();
+
+  // --- Vacation (vacation-mode Analyst §2.1) --------------------------------
+  private readonly _vacations = signal<Vacation[]>(this.loadVacations());
+  /** Every vacation, past included. Read-only; mutate via start/update/endVacation. */
+  readonly vacations = this._vacations.asReadonly();
 
   /**
    * Habits excluding archived ones. Components should use this by default;
@@ -198,19 +204,24 @@ export class HabitService {
   }
 
   /**
-   * Is `iso` inside any pause range? Uses half-open interval logic (habit-lifecycle
+   * Is `iso` paused? Covers BOTH reasons — the habit's own ranges and any global vacation — so isDueOn and every derivation treat vacation days as neutral (AD-035).
+   *
+   * The habit's own ranges use half-open interval logic (habit-lifecycle
    * CriticReview R2): a range is `[from, to)`, so `iso` is paused iff
    * `from <= iso` and (`to` is null or `iso < to`).
    */
   isPausedOn(habit: Habit, iso: string): boolean {
+    return this.isOnVacation(iso) || this.inOwnPauseRange(habit, iso);
+  }
+
+  /** Is `iso` inside one of this habit's own pause ranges (ignores vacations)? */
+  private inOwnPauseRange(habit: Habit, iso: string): boolean {
     return (habit.pausedRanges ?? []).some((r) => r.from <= iso && (r.to === null || iso < r.to));
   }
 
-  /**
-   * Is the habit paused right now? Convenience for the UI.
-   */
-  isPaused(habit: Habit, today: Date = new Date()): boolean {
-    return this.isPausedOn(habit, HabitService.todayIso(today));
+  /** Has the user paused this habit by hand (its own pausedRanges)? Ignores vacations — this drives the Pause/Resume button, not "is it due" (vacation-mode Analyst §2.3). */
+  isManuallyPaused(habit: Habit, today: Date = new Date()): boolean {
+    return this.inOwnPauseRange(habit, HabitService.todayIso(today));
   }
 
   /**
@@ -222,7 +233,7 @@ export class HabitService {
     if (!habit) {
       return;
     }
-    if (this.isPaused(habit) || habit.status === 'archived') {
+    if (this.isManuallyPaused(habit) || habit.status === 'archived') {
       return;
     }
     const today = HabitService.todayIso();
@@ -303,6 +314,80 @@ export class HabitService {
     const updated = { ...habit, pausedRanges: ranges, status: 'active' as const };
     this._habits.update((list) => list.map((h) => (h.id === id ? updated : h)));
     this.persist();
+  }
+
+  /**
+   * The current-or-upcoming vacation (`to > today`), or null. Invariant I1:
+   * there is at most one.
+   */
+  currentVacation(today: Date = new Date()): Vacation | null {
+    const todayIso = HabitService.todayIso(today);
+    return this._vacations().find((v) => v.to > todayIso) ?? null;
+  }
+
+  /** Is `iso` inside any vacation, past or future? Half-open `[from, to)`. */
+  isOnVacation(iso: string): boolean {
+    return this._vacations().some((v) => v.from <= iso && iso < v.to);
+  }
+
+  /**
+   * Schedule a vacation. Refused (returns false, no persist) if the dates are
+   * malformed, `from` is before today (I3), the range is empty (I4), or one
+   * is already current/upcoming (I1 — edit that one instead). I2 needs no
+   * guard: it follows from I1 + I3 (CriticReview R12).
+   */
+  startVacation(from: string, to: string, today: Date = new Date()): boolean {
+    const todayIso = HabitService.todayIso(today);
+    if (!isVacation({ from, to }) || from < todayIso || this.currentVacation(today)) {
+      return false;
+    }
+    this._vacations.update((list) => [...list, { from, to }]);
+    this.persistVacations();
+    return true;
+  }
+
+  /**
+   * Replace the current/upcoming vacation. Upcoming: any valid range with
+   * `from >= today`. Underway (`from <= today`): `from` is locked and the new
+   * `to` must be > today (I6) — ending it today is `endVacation`, not an edit.
+   */
+  updateVacation(from: string, to: string, today: Date = new Date()): boolean {
+    const current = this.currentVacation(today);
+    const todayIso = HabitService.todayIso(today);
+    if (!current || !isVacation({ from, to })) {
+      return false;
+    }
+    if (current.from <= todayIso) {
+      if (from !== current.from || to <= todayIso) {
+        return false;
+      }
+    } else if (from < todayIso) {
+      return false;
+    }
+    this._vacations.update((list) => list.map((v) => (v === current ? { from, to } : v)));
+    this.persistVacations();
+    return true;
+  }
+
+  /**
+   * "I'm back" / "Cancel vacation" (I5). Underway since before today:
+   * truncate to `to = today`, so elapsed days stay paused and today is live.
+   * Upcoming, or started today: remove it — nothing elapsed. Never touches a
+   * past vacation. Deliberately NOT the prototype's `vacation = null`, which
+   * would turn elapsed days into `missed`.
+   */
+  endVacation(today: Date = new Date()): void {
+    const current = this.currentVacation(today);
+    if (!current) {
+      return;
+    }
+    const todayIso = HabitService.todayIso(today);
+    this._vacations.update((list) =>
+      current.from < todayIso
+        ? list.map((v) => (v === current ? { from: current.from, to: todayIso } : v))
+        : list.filter((v) => v !== current),
+    );
+    this.persistVacations();
   }
 
   /**
@@ -389,36 +474,37 @@ export class HabitService {
   }
 
   /**
-   * Status of a habit on a given day. One of: 'not-due' (not scheduled or
-   * before creation), 'done' (in completedDates), 'missed' (due, not done, past),
-   * 'pending' (due, not done, today), 'future' (after today). Order matters
-   * (CriticReview R1): future → done → not-due → pending → missed.
+   * Status of a habit on a given day. One of: 'done' (in completedDates),
+   * 'paused' (manual or vacation pause, on/after start, past or future),
+   * 'future' (after today), 'not-due' (not scheduled or before start/creation),
+   * 'pending' (due, not done, today), 'missed' (due, not done, past).
+   * Order matters: done → paused → future → not-due → pending/missed. Done wins
+   * over everything (AD-014); paused comes before future so an upcoming vacation
+   * shows on the calendar (AD-036).
    */
   dayStatus(habit: Habit, iso: string, todayDate: Date = new Date()): DayStatus {
     const todayIso = HabitService.todayIso(todayDate);
 
-    // 1. Future: iso > today
+    // 1. Done — what happened wins (AD-014). completedDates never holds a
+    //    future day, so checking this before `future` changes nothing.
+    if (iso <= todayIso && habit.completedDates.includes(iso)) {
+      return 'done';
+    }
+    // 2. Paused — manual or vacation, on/after start, INCLUDING future days so
+    //    an upcoming vacation shows on the calendar (AD-036).
+    if (iso >= HabitService.startIso(habit) && this.isPausedOn(habit, iso)) {
+      return 'paused';
+    }
+    // 3. Future
     if (iso > todayIso) {
       return 'future';
     }
-
-    // 2. Done: iso in completedDates (including off-schedule completions)
-    if (habit.completedDates.includes(iso)) {
-      return 'done';
-    }
-
-    // 3. Not due: habit not due on this day (or before creation)
+    // 4. Not due: not scheduled, or before the start date
     if (!this.isDueOn(habit, iso)) {
       return 'not-due';
     }
-
-    // 4. Pending: due today, not completed
-    if (iso === todayIso) {
-      return 'pending';
-    }
-
-    // 5. Missed: due, not done, past day
-    return 'missed';
+    // 5. Pending / 6. Missed
+    return iso === todayIso ? 'pending' : 'missed';
   }
 
   /**
@@ -811,6 +897,27 @@ export class HabitService {
   }
 
   /**
+   * The Sunday-aligned cells of a month: leading `null`s, one ISO per day,
+   * trailing `null`s to a multiple of 7. Month is 0-based. Pure. Shared by
+   * `monthGrid` and `<app-range-picker>` so the two cannot disagree.
+   */
+  static monthLayout(year: number, month: number): Array<string | null> {
+    const cells: Array<string | null> = [];
+    const leading = new Date(year, month, 1).getDay();
+    for (let i = 0; i < leading; i++) {
+      cells.push(null);
+    }
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    for (let day = 1; day <= daysInMonth; day++) {
+      cells.push(HabitService.todayIso(new Date(year, month, day)));
+    }
+    while (cells.length % 7 !== 0) {
+      cells.push(null);
+    }
+    return cells;
+  }
+
+  /**
    * Build a calendar month grid as an ordered array of cells (leading/trailing
    * blanks to align weekday columns), each with iso and status. Month is 0-based
    * (JS convention). Pure; year/month injectable for prev/next paging.
@@ -823,33 +930,9 @@ export class HabitService {
     month: number,
     today: Date = new Date(),
   ): Array<{ iso: string; status: DayStatus } | { blank: true }> {
-    const result: Array<{ iso: string; status: DayStatus } | { blank: true }> = [];
-
-    // Leading blanks: weekday index of the 1st (Sun=0)
-    const firstDayOfMonth = new Date(year, month, 1);
-    const leadingBlanks = firstDayOfMonth.getDay();
-    for (let i = 0; i < leadingBlanks; i++) {
-      result.push({ blank: true });
-    }
-
-    // Days of the month
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    for (let day = 1; day <= daysInMonth; day++) {
-      const iso = HabitService.todayIso(new Date(year, month, day));
-      const status = this.dayStatus(habit, iso, today);
-      result.push({ iso, status });
-    }
-
-    // Trailing blanks to complete the final week (optional, keeping total a multiple of 7)
-    const remainingCells = result.length % 7;
-    if (remainingCells !== 0) {
-      const trailingBlanks = 7 - remainingCells;
-      for (let i = 0; i < trailingBlanks; i++) {
-        result.push({ blank: true });
-      }
-    }
-
-    return result;
+    return HabitService.monthLayout(year, month).map((iso) =>
+      iso === null ? { blank: true as const } : { iso, status: this.dayStatus(habit, iso, today) },
+    );
   }
 
   /** Persist all state. Guarded so a full/blocked quota never crashes. */
@@ -894,6 +977,33 @@ export class HabitService {
         }
         return updated as Habit;
       });
+    } catch {
+      return [];
+    }
+  }
+
+  /** Persist vacations. Same quota guard as `persist()`. */
+  private persistVacations(): void {
+    try {
+      localStorage.setItem(HabitService.VACATIONS_KEY, JSON.stringify(this._vacations()));
+    } catch {
+      // Same as persist(): no error UI yet.
+    }
+  }
+
+  /**
+   * Same fail-soft contract as `load()` (AD-002): missing key, non-array or
+   * parse error → []; malformed rows dropped, valid rows survive. A lost
+   * vacation re-exposes its days as `missed` — accepted (CriticReview R9).
+   */
+  private loadVacations(): Vacation[] {
+    try {
+      const raw = localStorage.getItem(HabitService.VACATIONS_KEY);
+      if (!raw) {
+        return [];
+      }
+      const parsed: unknown = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter(isVacation) : [];
     } catch {
       return [];
     }

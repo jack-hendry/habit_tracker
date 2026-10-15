@@ -8,6 +8,9 @@ Architecture decision (locked): **client-side only, localStorage, single
 device.** No backend, no accounts until a phase explicitly demands it
 (notifications will force that conversation).
 
+**Being reopened by Phase 6** (2026-10-14): slice 6d moves storage to a server.
+The superseding `AD` entry is written when 6d's Analyst lands, not before.
+
 ## Phases
 
 | Phase | Slice | Status |
@@ -17,6 +20,7 @@ device.** No backend, no accounts until a phase explicitly demands it
 | **3 — Dashboard + calendar + basic stats** | Today / overdue / completed-today views; daily/weekly/monthly calendar; completion %. Needs history from 1–2. | ✅ Shipped (`specs/archive/2026-07-17-dashboard-calendar-stats/`) |
 | **4 — Rich habits** | Completion types (count / duration / numeric / checklist), categories, colors, icons, notes, edit/rename, archive vs delete, pause, start date, reactivation. | In progress — sliced 4a/4b/4c (`specs/phase-4-plan.md`). 4a metadata ✅ (`specs/archive/2026-07-23-habit-metadata/`); 4b lifecycle ✅ (`specs/archive/2026-07-23-habit-lifecycle/`); 4c completion types planned |
 | **5 — Notifications** | Time-based / multiple / snooze / skip-after-complete reminders. Requires a PWA service worker (or backend) — biggest architectural jump. | Planned |
+| **6 — Personal & portable** | Past-day completion, mobile layout, Fly.io hosting behind single-user auth, server-side storage. Reverses the client-only decision above. | Planned — sliced 6a–6d (`specs/phase-6-plan.md`) |
 
 ## Open product questions (deferred until their phase)
 
@@ -28,7 +32,9 @@ Carried from the brainstorm so they are not lost:
   reversible and retains full history; delete stays permanent but gains a
   confirm step, with archive nudged as the default way to retire a habit.
 - **Schedule changes:** If a schedule changes later, does history recalculate?
-  Can users skip holidays? → Phase 2/3.
+  Can users skip holidays? → **Answered by vacation-mode** (`specs/vacation-mode/`,
+  2026-10-15): a global vacation pauses every habit, its days render `paused`
+  and never count as missed, so streaks survive (AD-035, AD-036).
 - **Streak rules:** Does a missed day reset immediately? What if the habit
   wasn't scheduled that day (no penalty)? → Phase 2.
 - **Completion types:** Yes/No, count, duration, distance, weight, numeric,

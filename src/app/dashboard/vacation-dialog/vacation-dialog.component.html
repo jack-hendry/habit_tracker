@@ -1,0 +1,42 @@
+<div class="vac-head">
+  <span class="vac-tile" aria-hidden="true">🌴</span>
+  <div class="vac-titles">
+    <h2 class="vac-title">Vacation mode</h2>
+    <p class="vac-sub">Pause every habit while you're away. Paused days don't count as missed, so streaks stay intact.</p>
+  </div>
+  <button type="button" class="vac-close" aria-label="Close" (click)="closed.emit()">✕</button>
+</div>
+
+<app-range-picker
+  [from]="from()"
+  [to]="to()"
+  [todayIso]="todayIso()"
+  [lockStart]="underway()"
+  (rangeChange)="setRange($event)"
+/>
+
+<div class="vac-quick">
+  <span class="vac-eyebrow">Quick length · from start date</span>
+  <div class="vac-pills">
+    @for (p of pills; track p.days) {
+      <button
+        type="button"
+        class="pill"
+        [class.pill-active]="length() === p.days"
+        [disabled]="pillDisabled(p.days)"
+        (click)="setLength(p.days)"
+      >{{ p.label }}</button>
+    }
+  </div>
+</div>
+
+<div class="vac-summary">
+  <div class="vac-row"><span>Paused · {{ length() }} {{ dayWord() }}</span><span class="vac-val">{{ rangeLabel() }}</span></div>
+  <div class="vac-row"><span>Habits resume</span><span class="vac-val">{{ resumeLabel() }}</span></div>
+  <span class="vac-keep">✓ {{ keepLine() }}</span>
+</div>
+
+<div class="vac-actions">
+  <button type="button" class="btn-secondary" (click)="closed.emit()">Cancel</button>
+  <button type="button" class="btn-primary" (click)="confirm()">{{ confirmLabel() }}</button>
+</div>

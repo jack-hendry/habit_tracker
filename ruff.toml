@@ -1,0 +1,11 @@
+# Lints tools/ only. This is an Angular repo with one Python script in it, so
+# the linter is scoped to that script rather than pretending the repo is a
+# Python project -- no pyproject.toml, no effect on npm or the build.
+target-version = "py39"
+line-length = 100
+include = ["tools/**/*.py"]
+
+[lint]
+# E/F: pyflakes + pycodestyle errors. I: import order. B: bugbear (mutable
+# defaults, loop-variable capture). UP: pyupgrade. RUF: ruff's own checks.
+select = ["E", "F", "I", "B", "UP", "RUF"]

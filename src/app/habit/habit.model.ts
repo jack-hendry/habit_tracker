@@ -7,6 +7,13 @@ export type Schedule =
   | { type: 'weekdays'; days: number[] }; // JS getDay(): 0=Sun … 6=Sat
 
 /**
+ * ISO 8601 date pattern: YYYY-MM-DD with zero-padded month and day.
+ * Used by `isHabit` and `update()`'s `startDate` validation so they cannot
+ * disagree (habit-lifecycle CriticReview R4).
+ */
+export const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
  * A time period when a habit is paused. The interval is half-open: [from, to),
  * so `to` is exclusive. This means "paused from Monday to Friday" is from Monday
  * (inclusive) to Saturday (exclusive). When `to` is null, the pause is still open
@@ -21,11 +28,38 @@ export interface PausedRange {
 }
 
 /**
+ * A global vacation: every habit is paused across the half-open `[from, to)`.
+ * `to` is the RESUME date and is never null (vacation-mode AD-035). Stored
+ * separately from habits under `habit_tracker.vacations.v1`. Past vacations
+ * are kept forever — deleting one would turn its days back into `missed`.
+ */
+export interface Vacation {
+  from: string; // YYYY-MM-DD, inclusive
+  to: string;   // YYYY-MM-DD, EXCLUSIVE — the day habits resume
+}
+
+/** Runtime guard for a stored `Vacation`. Non-empty ranges only (`from < to`). */
+export function isVacation(value: unknown): value is Vacation {
+  if (value === null || typeof value !== 'object') {
+    return false;
+  }
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v['from'] === 'string' &&
+    ISO_DATE.test(v['from']) &&
+    typeof v['to'] === 'string' &&
+    ISO_DATE.test(v['to']) &&
+    v['from'] < v['to']
+  );
+}
+
+/**
  * Status of a habit on a given day. Phase 3 uses this for calendar/dashboard
  * derivations. Order of checks (CriticReview R1): `future` → `done` → `not-due`
- * → `pending` → `missed`.
+ * → `pending` → `missed`. `'paused'` (vacation-mode AD-036): inside a manual
+ * pause range or a vacation, on/after the start date — including future days.
  */
-export type DayStatus = 'not-due' | 'done' | 'missed' | 'pending' | 'future';
+export type DayStatus = 'not-due' | 'done' | 'missed' | 'pending' | 'future' | 'paused';
 
 /**
  * A single tracked habit.
@@ -65,13 +99,6 @@ export interface Habit {
   status?: 'active' | 'archived';     // absent → 'active'
   pausedRanges?: PausedRange[];
 }
-
-/**
- * ISO 8601 date pattern: YYYY-MM-DD with zero-padded month and day.
- * Used by `isHabit` and `update()`'s `startDate` validation so they cannot
- * disagree (habit-lifecycle CriticReview R4).
- */
-export const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * The only fields `HabitService.update` may change. `id`, `createdAt` and

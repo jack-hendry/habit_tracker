@@ -414,8 +414,10 @@ describe('HabitDetailComponent', () => {
 
     // Navigate to January of last year by clicking prev multiple times
     const prevBtn = harness.routeNativeElement?.querySelectorAll('.month-arrow')[0] as HTMLButtonElement;
+    // The guard only stops a runaway loop. January of last year is 13–24 months
+    // back depending on today's month, so a cap of 20 failed every Sep–Dec.
     let count = 0;
-    while (!prevBtn?.disabled && count < 20) {
+    while (!prevBtn?.disabled && count < 60) {
       prevBtn?.click();
       harness.detectChanges();
       count++;

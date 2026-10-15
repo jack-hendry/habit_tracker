@@ -257,6 +257,13 @@
   color: var(--text-ghost);
 }
 
+/* AD-036 — dashed like future, but in the paused palette (prototype circleFor). */
+.status-paused {
+  background: var(--paused-bg);
+  border: 1.5px dashed var(--paused-border);
+  color: var(--paused-text);
+}
+
 .summary-card {
   flex: 1;
   padding: 18px 20px;

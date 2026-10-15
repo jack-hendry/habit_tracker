@@ -27,6 +27,17 @@ set -euo pipefail
 
 SIZE_LIMIT_BYTES=20480 # 20 KB
 
+# Both gates below make temp dirs. One trap, installed once, so neither gate
+# can clobber the other's cleanup by installing a second EXIT trap.
+LESSON_TMP=""
+STATE_TMP=""
+cleanup() {
+  [[ -n "$LESSON_TMP" ]] && rm -rf "$LESSON_TMP"
+  [[ -n "$STATE_TMP" ]] && rm -rf "$STATE_TMP"
+  return 0
+}
+trap cleanup EXIT
+
 # --- Determine the diff range -----------------------------------------
 ZERO_SHA="0000000000000000000000000000000000000000"
 
@@ -89,7 +100,6 @@ echo "clean-table-check: checking range ${RANGE}"
 # specs/LESSONS.md exists, so this is safe on branches predating the split.
 if git cat-file -e "HEAD:specs/LESSONS.md" 2>/dev/null; then
   LESSON_TMP="$(mktemp -d)"
-  trap 'rm -rf "$LESSON_TMP"' EXIT
 
   git show HEAD:specs/STATE.md 2>/dev/null \
     | sed -n 's/^- \*\*\(L-[0-9]\{3\}\)\*\*.*/\1/p' | sort -u >"$LESSON_TMP/headlines"
@@ -114,6 +124,33 @@ if git cat-file -e "HEAD:specs/LESSONS.md" 2>/dev/null; then
     exit 1
   fi
   echo "clean-table-check: lessons in sync ($(wc -l <"$LESSON_TMP/headlines" | tr -d ' ') entries)"
+fi
+
+# --- Gate 4: STATE.md size budget ---------------------------------------
+# specs/STATE.md is read at the start of every session, so its length is a
+# recurring cost. tools/state_rotate.py owns the rule; this only calls it.
+#
+# --check ONLY, never --apply. Two reasons: this script does not edit files on
+# your behalf (see the header), and choosing which decisions are still live is
+# a judgement call that should not happen inside a push.
+#
+# Checked against HEAD like gate 3, so what you push is what gets measured.
+# Runs on every push, not just archive pushes -- STATE.md grows on any commit.
+if command -v python3 >/dev/null 2>&1 && [[ -f tools/state_rotate.py ]]; then
+  if git cat-file -e "HEAD:specs/STATE.md" 2>/dev/null; then
+    STATE_TMP="$(mktemp -d)"
+    git show HEAD:specs/STATE.md >"$STATE_TMP/STATE.md"
+    if ! python3 tools/state_rotate.py --check --state "$STATE_TMP/STATE.md"; then
+      echo "" >&2
+      echo "specs/STATE.md is over its size budget. Rotate it, then push again." >&2
+      exit 1
+    fi
+  fi
+else
+  # A missing interpreter is not a dirty table -- skip rather than block. CI
+  # always has python3, so the gate is never quietly off where it is the
+  # guarantee rather than the reminder.
+  echo "clean-table-check: python3 or tools/state_rotate.py unavailable, size gate skipped"
 fi
 
 DIFF_OUTPUT="$(git diff --name-status -M "$RANGE" -- || true)"
