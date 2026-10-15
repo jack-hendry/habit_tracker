@@ -1,0 +1,29 @@
+<div class="picker-head">
+  <button type="button" class="arrow" [disabled]="!canPrev()" (click)="prev()" aria-label="Previous month">‹</button>
+  <span class="picker-label">{{ label() }}</span>
+  <button type="button" class="arrow" [disabled]="!canNext()" (click)="next()" aria-label="Next month">›</button>
+</div>
+<div class="picker-grid">
+  @for (w of weekdayInitials; track $index) {
+    <span class="weekday">{{ w }}</span>
+  }
+  @for (cell of cells(); track $index) {
+    @if (cell.iso === null) {
+      <span class="cell blank"></span>
+    } @else {
+      <button
+        type="button"
+        class="cell"
+        [class.range-past]="cell.past"
+        [class.range-start]="cell.start"
+        [class.range-end]="cell.end"
+        [class.range-between]="cell.between"
+        [class.range-today]="cell.today && !cell.start && !cell.end && !cell.between"
+        [disabled]="cell.past"
+        [attr.aria-label]="cell.iso"
+        (click)="pick(cell)"
+      >{{ cell.day }}</button>
+    }
+  }
+</div>
+<span class="picker-hint">{{ hint() }}</span>

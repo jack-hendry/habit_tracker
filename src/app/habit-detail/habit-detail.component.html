@@ -71,6 +71,7 @@
               <span
                 class="circle"
                 [class]="'circle status-' + $any(cell).status"
+                [attr.title]="$any(cell).status === 'paused' ? 'Paused' : null"
                 [style.background]="$any(cell).status === 'done' ? hex() : null"
               >{{ +$any(cell).iso.slice(-2) }}</span>
             }

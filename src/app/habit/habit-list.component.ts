@@ -231,11 +231,16 @@ export class HabitListComponent {
 
   isPaused(id: string): boolean {
     const habit = this.habits().find((h) => h.id === id);
-    return habit ? this.habitService.isPaused(habit) : false;
+    return habit ? this.habitService.isManuallyPaused(habit) : false;
   }
 
   isPausedOn(habit: Habit, iso: string): boolean {
     return this.habitService.isPausedOn(habit, iso);
+  }
+
+  /** The "not today" chip reads "paused" when today is paused for any reason (Analyst §2.3, Q1). */
+  notTodayLabel(habit: Habit): string {
+    return this.habitService.isPausedOn(habit, HabitService.todayIso()) ? 'paused' : 'not today';
   }
 
   getPausedSinceLabel(habit: Habit): string {

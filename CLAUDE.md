@@ -34,6 +34,8 @@ Two rules that make this table work:
 
 This is a standalone Angular 21.2 application scaffolded via `ng new` (Angular CLI 21.2.19, TypeScript 5.9.3). It currently contains only the generated boilerplate (`AppComponent`, empty `routes`) — no habit-tracking features, services, or data models have been built yet. There is a single Angular project named `habit_tracker` in `angular.json`.
 
+Vacation mode (2026-10-15) is built: a global vacation record lives in `HabitService` under its own localStorage key, `habit_tracker.vacations.v1` (AD-035).
+
 ## Commands
 
 - `npm start` / `ng serve` — run the dev server at `http://localhost:4200/`, auto-reloads on change.
@@ -41,7 +43,7 @@ This is a standalone Angular 21.2 application scaffolded via `ng new` (Angular C
 - `npm run watch` / `ng build --watch --configuration development` — incremental dev build.
 - `npm test` / `ng test` — run unit tests via Karma + Jasmine.
   - To run a single spec file, use Karma's `--include` or narrow via `fit`/`fdescribe` in the spec, since there is no built-in Angular CLI flag for a single-file run.
-- `npm run design:shot -- <name> [--width 1440] [--viewport-only] [--seed]` — screenshot a route with Playwright and composite it beside its mockup. Requires the dev server to already be running. `--seed` injects the demo habits (`scripts/demo-data.mjs`) into localStorage before the page loads — without it an empty store renders the empty state and the comparison is worthless.
+- `npm run design:shot -- <name> [--width 1440] [--viewport-only] [--seed] [--seed-vacation] [--click "<button text>"]` — screenshot a route with Playwright and composite it beside its mockup. Requires the dev server to already be running. `--seed` injects the demo habits (`scripts/demo-data.mjs`) into localStorage before the page loads — without it an empty store renders the empty state and the comparison is worthless. `--seed-vacation` injects one demo vacation (7 days from today) into localStorage the same way, so vacation states render. `--click "<button text>"` clicks the button with that exact accessible name after the page settles and before the screenshot, to reach a state behind an interaction.
 - `node scripts/seed-demo.mjs` — print a one-liner to paste into DevTools that loads the same seven demo habits (~18 weeks of history) into a real browser. `--json` prints the raw array. Tooling only; nothing under `src/` imports it.
 - There is no e2e test runner configured (`ng e2e` requires adding a package first).
 - There is no lint script configured in `package.json` / `angular.json`.
@@ -93,5 +95,6 @@ specificity (L-025).
 - Uses Angular's standalone component API (no `NgModule`s) — bootstrapped via `ApplicationConfig` in `src/app/app.config.ts` and `bootstrapApplication` in `src/main.ts`.
 - Zone change detection enabled via `provideZoneChangeDetection()` in the bootstrap config (Angular 21+ default).
 - Routing is configured through `provideRouter(routes)` in `app.config.ts`, with routes defined in `src/app/app.routes.ts` (currently empty).
+- `HabitService` owns two stores: habits and vacations (`_vacations` signal, `habit_tracker.vacations.v1`). `isPausedOn` covers both manual pause ranges and vacations; `isManuallyPaused` covers only the habit's own ranges (AD-035/036).
 - Component styles use SCSS (`inlineStyleLanguage: scss`, default component schematic style is `scss`).
 - New components generated via `ng generate component <name>` will follow the standalone pattern by default (Angular 21 CLI default).

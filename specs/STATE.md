@@ -142,6 +142,12 @@ is purely additive; every prior caller ignores the return.
 
 **AD-034 — CI runs the same `clean-table-check.sh` as the pre-push hook.** → moved to `STATE-ARCHIVE.md`
 
+**AD-035 — Vacations are one global record in `HabitService`, half-open and kept forever.**
+(2026-10-15, vacation-mode) `Vacation { from, to }` with `to` the exclusive resume date, stored under `habit_tracker.vacations.v1`, separate from habits. `HabitService` owns it directly; a separate injected service would have broken the 62 `new HabitService()` calls in the spec (CriticReview R1). Past vacations are never deleted — dropping one turns its days back into `missed`. "I'm back" truncates `to` to today rather than clearing the record. `isPausedOn` covers manual ranges **and** vacations; `isManuallyPaused` covers only the habit's own ranges and drives the Pause/Resume button.
+
+**AD-036 — `DayStatus` gains `'paused'`, ranked after `done` and before `future`.**
+(2026-10-15, vacation-mode) One state for manual pauses and vacations, on/after `startDate`, including future days so an upcoming vacation shows on the calendar. `done` still wins (AD-014). One palette (`--paused-*`) for Calendar cells and habit-detail circles; `status-colors.ts` falls through to the not-due grey.
+
 ## Blockers
 
 **B-001 — The Haiku-enforcement hook denied every non-`.md` edit in the repo.** → moved to `STATE-ARCHIVE.md`
@@ -203,6 +209,8 @@ disagree.
 - **L-040** — A step's `Done when` can name a file the step is forbidden to touch.
 - **L-041** — A check that computes its own diff range is only as trustworthy as that range, and a new environment silently changes it.
 - **L-042** — The empty-tree fallback made the archive gate pass on exactly the push it exists to block.
+- **L-043** — A subagent without the Claude Design MCP cannot open a prototype; the caller must mint the `serve_url`.
+- **L-044** — A test that hard-codes the size of a set it iterates breaks the day the set legitimately grows.
 
 ## Quick Tasks
 
@@ -226,6 +234,9 @@ disagree.
 | Fix `design-shot.mjs` dpr mismatch | ✓ Done | Both `browser.newPage()` calls (capture + composite) now pass `deviceScaleFactor: 2`, matching the dpr-2 `design/target/*.png` files. Before, captures defaulted to dpr 1 and the composite downscaled both halves, so sub-2px detail was unresolvable in every page's design check, not just stacks' (L-035). `design/actual/stacks.png` now captures at 2880×1800 instead of 1440×900; re-shot and confirmed the composite still renders correctly. One file (`scripts/design-shot.mjs`) |
 | Two more gates on the run marker | ✓ Done | 2026-08-27, from `BACKLOG.md`. `enforce-haiku-tasks-pretooluse.sh` now **asks** on (a) `git commit`/`git push` from the top-level session while `## Executing:` is live — the marker said "mid-run" and nothing acted on it — and (b) an `Agent`/`Task` dispatch with `model: opus` or no `model`, which `TEMPLATE.md` forbids for a step (absent inherits opus/high, the priciest default). ASK not DENY: a checkpoint commit before a worktree merge and a deliberate one-off are both legitimate, and deny-with-no-override is the fail-closed half of B-001. Matched `Task` alongside `Agent` per L-028. The per-step half of the model check was dropped as unimplementable — nothing in an Agent call names its step (see `BACKLOG.md`). Matcher widened in `.claude/settings.json`; 24 cases added to the hook's test matrix, including a dormant-cwd block pinning both gates *below* the marker check |
 | Surface `git push --no-verify` | ✓ Done | 2026-08-27, from `BACKLOG.md`. New always-on `.claude/hooks/warn-push-bypass.sh` asks before a push carrying `--no-verify`, closing the gap CLAUDE.md names in prose ("a reminder for the honest case, not a guarantee"). Deliberately **not** keyed to the run marker — most pushes happen outside a run — and **not** exempt for subagents. Excludes `-n`, which on a push is `--dry-run` and runs no hooks anyway. Value is bounded: CI runs the same script on every PR and push to `main`, so this only saves the round-trip. Own test matrix (`warn-push-bypass.test.sh`), incl. the `grep -n no-verify CLAUDE.md` false positive an unanchored pattern would cause |
+| Phase 6 roadmap | ✓ Done | 2026-10-14. `specs/phase-6-plan.md` slices backfill / mobile / Fly + auth / server storage into 6a–6d; `ROADMAP.md` row added. Planning only — no code |
+| Design roadmap v2 §0 (shell) | ✓ Done | 2026-10-15. Desktop shell re-read from the prototype source: no delta. Habit detail (`page: 'goal'`) re-diffed: layout unchanged, but the source has clickable month circles (6a), a "logged late" dot (6a lists it out of scope) and a styled `paused` status (vacation-mode). Findings in `specs/design-roadmap-v2.md` §0. No code |
+| Fix date-bomb in habit-detail paging spec | ✓ Done | 2026-10-15. "paging back from January…" capped its ‹-click loop at 20, but January of last year is 13–24 months back, so the test failed every Sep–Dec. Cap raised to 60. Baseline back to 456/456. One file (`habit-detail.component.spec.ts`) |
 
 ---
 
@@ -247,6 +258,7 @@ disagree.
 | **R3** | Redesign §3 — Calendar (one card, per-status day numbers, Today ring) | ✅ Done, unmerged — 236 → **251** tests | `archive/2026-08-19-calendar-redesign/` |
 | **R4** | Redesign §4 — Analytics (stat row, heatmap, leaderboard, bar chart, weekday card) | ✅ Done, uncommitted — 251 → **339** tests | `archive/2026-08-20-analytics/` |
 | **R5** | Redesign §5 — Stacks (**new page**) | ✅ Done — 339 → **404** tests | `archive/2026-08-21-stacks/` |
+| **VM** | Vacation mode (global pause, `'paused'` status, Dashboard banner + modal) | ✅ Done, uncommitted — 456 → **514** tests | `vacation-mode/` (Large) |
 | — | Angular 17 → 21 upgrade (four major hops) | ✅ Done | `archive/2026-07-17-upgrade-angular-21/` |
 
 ## Notes
