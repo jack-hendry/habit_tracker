@@ -567,3 +567,25 @@ that already had an upstream; the CI work in [[L-041]] tested range selection on
 an existing branch and the bug lives one branch-state earlier. The fix diffs
 against the merge base with `origin/HEAD` (falling back to `origin/main`),
 keeping the empty tree only for genuinely unrelated history.
+
+**L-043 — A subagent without the Claude Design MCP cannot open a prototype; the caller must mint the `serve_url`.**
+(2026-10-15, vacation-mode Step 9) The `design-page-tour` agent's tool list has
+the Chrome tools but none of the `mcp__claude-design__*` tools, so it had no way
+to get a `serve_url` for the prototype and returned BLOCKED without capturing
+anything. The top-level session does have `render_preview`. The fix was to call
+it there and hand the short-lived URL to the same agent via SendMessage, telling
+it never to write the URL to a file or report. The step's "If blocked" clause
+only anticipated a missing button, not missing access — so the agent correctly
+treated it as a tooling block rather than a source change. Until the agent
+definition gains `render_preview`, any step that runs `design-page-tour` should
+mint the URL first and pass it in the prompt (it expires in ~1 hour).
+
+**L-044 — A test that hard-codes the size of a set it iterates breaks the day the set legitimately grows.**
+(2026-10-15, vacation-mode Step 16) `calendar.design.spec.ts` iterated the `CS`
+status table but asserted `new Set(colours).size` was the literal `5`. Adding
+`status-paused` to `CS` — exactly what the spec author intended future steps to
+do — failed it, and the test had to be edited mid-run to compare against
+`Object.keys(CS).length`. The assertion's meaning was "every status has a
+distinct colour", not "there are five statuses"; write the count from the same
+table the loop reads, so extending the table extends the check instead of
+breaking it.

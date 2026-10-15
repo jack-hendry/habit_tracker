@@ -290,6 +290,17 @@ describe('HabitDetailComponent design conformance', () => {
     });
   });
 
+  describe('status-paused circle', () => {
+    it('status-paused uses the paused palette with a dashed border', () => {
+      const circle = probeCircle('paused');
+      const cs = getComputedStyle(circle);
+      expect(cs.backgroundColor).withContext('background').toBe('rgb(238, 242, 247)');
+      expect(cs.color).withContext('color').toBe('rgb(123, 135, 148)');
+      expect(cs.borderTopStyle).withContext('border-style').toBe('dashed');
+      expect(cs.borderTopColor).withContext('border colour').toBe('rgb(182, 194, 208)');
+    });
+  });
+
   describe('hero row structure', () => {
     it('hero-row has correct gap and alignment', () => {
       const heroRow = host.querySelector('.hero-row') as HTMLElement;

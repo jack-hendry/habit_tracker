@@ -15,6 +15,7 @@
 
 export const STORAGE_KEY = 'habit_tracker.habits.v1';
 export const STACKS_STORAGE_KEY = 'habit_tracker.stacks.v1';
+export const VACATIONS_STORAGE_KEY = 'habit_tracker.vacations.v1';
 
 /** Days of history generated, index 0 = oldest, index DAYS-1 = today. */
 const DAYS = 126;
@@ -156,4 +157,11 @@ export function buildDemoStacks() {
       habitIds: ['demo-read', 'demo-sleep', 'demo-journal'],
     },
   ];
+}
+
+/** A 7-day vacation starting today: [today, today+7). */
+export function buildDemoVacation(today = new Date()) {
+  const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const end = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 7);
+  return [{ from: iso(today), to: iso(end) }];
 }

@@ -4,13 +4,21 @@
 //   node scripts/design-shot.mjs habits --width 390
 //   node scripts/design-shot.mjs dashboard --route /habits --viewport-only
 //   node scripts/design-shot.mjs dashboard --seed    # demo habits, not an empty store
+//   node scripts/design-shot.mjs vacation-modal --seed --seed-vacation --click "Set vacation"
 //
 // Reads design/target/<name>.png (optional) and writes:
 //   design/actual/<name>.png   — what the app currently renders
 //   design/compare/<name>.png  — target | actual, side by side (only if a target exists)
 
 import { chromium } from 'playwright';
-import { buildDemoHabits, buildDemoStacks, STORAGE_KEY, STACKS_STORAGE_KEY } from './demo-data.mjs';
+import {
+  buildDemoHabits,
+  buildDemoStacks,
+  buildDemoVacation,
+  STORAGE_KEY,
+  STACKS_STORAGE_KEY,
+  VACATIONS_STORAGE_KEY,
+} from './demo-data.mjs';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +34,8 @@ const ROUTES = {
   analytics: '/analytics',
   stacks: '/stacks',
   'habit-detail': '/habits/demo-read',
+  'dashboard-vacation': '/',
+  'vacation-modal': '/',
 };
 
 // Each column in the composite is capped at this width. Keeps the output legible
@@ -67,9 +77,12 @@ const STATES = {
     'status-future',
     'blank',
     'today',
+    'status-paused',
   ],
   habits: ['checked', 'not-due-today', 'archived', 'paused-badge'],
   dashboard: ['done', 'last-done'],
+  'dashboard-vacation': ['vacation-banner'],
+  'vacation-modal': ['range-start', 'range-end', 'range-between', 'range-past', 'pill-active'],
   analytics: ['heat-0', 'heat-1', 'heat-2', 'heat-3', 'heat-4', 'bar-max', 'bar-rest', 'dow-best', 'dow-rest'],
   'habit-detail': ['cell-blank'],
   stacks: ['stack-item-done', 'stack-item-todo', 'stack-item-not-due', 'stack-streak', 'unstacked-chip'],
@@ -79,15 +92,26 @@ function parseArgs(argv) {
   const [name, ...rest] = argv;
   if (!name || name.startsWith('--')) {
     throw new Error(
-      'Usage: node scripts/design-shot.mjs <name> [--route /path] [--width 1440] [--height 900] [--viewport-only] [--seed]',
+      'Usage: node scripts/design-shot.mjs <name> [--route /path] [--width 1440] [--height 900] [--viewport-only] [--seed] [--seed-vacation] [--click "<button text>"]',
     );
   }
 
-  const args = { name, width: 1440, height: 900, fullPage: true, seed: false, route: ROUTES[name] };
+  const args = {
+    name,
+    width: 1440,
+    height: 900,
+    fullPage: true,
+    seed: false,
+    seedVacation: false,
+    click: null,
+    route: ROUTES[name],
+  };
   for (let i = 0; i < rest.length; i++) {
     const flag = rest[i];
     if (flag === '--viewport-only') args.fullPage = false;
     else if (flag === '--seed') args.seed = true;
+    else if (flag === '--seed-vacation') args.seedVacation = true;
+    else if (flag === '--click') args.click = rest[++i];
     else if (flag === '--route') args.route = rest[++i];
     else if (flag === '--width') args.width = Number(rest[++i]);
     else if (flag === '--height') args.height = Number(rest[++i]);
@@ -211,8 +235,23 @@ async function main() {
       console.log(`seeded:  2 demo stacks`);
     }
 
+    if (args.seedVacation) {
+      const vacations = JSON.stringify(buildDemoVacation(new Date()));
+      await page.addInitScript(
+        ([key, value]) => window.localStorage.setItem(key, value),
+        [VACATIONS_STORAGE_KEY, vacations],
+      );
+      console.log(`seeded:  1 demo vacation (7 days from today)`);
+    }
+
     await page.goto(`${BASE_URL}${args.route}`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(300); // let Angular animations settle
+
+    if (args.click) {
+      await page.getByRole('button', { name: args.click, exact: true }).click();
+      await page.waitForTimeout(300);
+    }
+
     await page.screenshot({ path: actualPath, fullPage: args.fullPage });
 
     const dims = `${args.width}x${args.height}${args.fullPage ? ', full page' : ''}`;

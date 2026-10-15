@@ -537,6 +537,20 @@ describe('HabitService — Phase 3 (dayStatus, completionRate, isLapsed, monthGr
       const cell18 = grid.find((c) => 'iso' in c && c.iso === '2026-07-18');
       expect('status' in cell18! && cell18!.status).toBe('future');
     });
+
+    it('monthLayout: July 2026 has 3 leading nulls and length 35', () => {
+      const layout = HabitService.monthLayout(2026, 6);
+      expect(layout.slice(0, 3)).toEqual([null, null, null]);
+      expect(layout[3]).toBe('2026-07-01');
+      expect(layout.length).toBe(35);
+    });
+
+    it('monthLayout: February 2026 has length 28 and no nulls (1st is a Sunday)', () => {
+      const layout = HabitService.monthLayout(2026, 1);
+      expect(layout.length).toBe(28);
+      expect(layout.includes(null)).toBe(false);
+      expect(layout[0]).toBe('2026-02-01');
+    });
   });
 
   describe('recentStatuses', () => {
@@ -1008,10 +1022,10 @@ describe('HabitService — Phase 4b (habit-lifecycle — startDate, status, paus
       expect(habit.pausedRanges).toBeDefined();
       expect(habit.pausedRanges!.length).toBeGreaterThan(0);
       expect(habit.pausedRanges![habit.pausedRanges!.length - 1].to).toBeNull(); // Open
-      expect(svc.isPaused(habit)).toBe(true);
+      expect(svc.isManuallyPaused(habit)).toBe(true);
     });
 
-    it('pause, resume, then days inside the closed range stay not-due (AC 6, R6)', () => {
+    it('pause, resume, then days inside the closed range are paused (AC 6, R6; AD-036)', () => {
       const h = {
         id: 'h1',
         name: 'Test',
@@ -1027,9 +1041,9 @@ describe('HabitService — Phase 4b (habit-lifecycle — startDate, status, paus
       const svc = new HabitService();
       const reloaded = svc.habits()[0];
       // Days 14, 15, 16 are inside [14, 17), so not-due (not missed)
-      expect(svc.dayStatus(reloaded, '2026-07-14', SAT_18)).toBe('not-due');
-      expect(svc.dayStatus(reloaded, '2026-07-15', SAT_18)).toBe('not-due');
-      expect(svc.dayStatus(reloaded, '2026-07-16', SAT_18)).toBe('not-due');
+      expect(svc.dayStatus(reloaded, '2026-07-14', SAT_18)).toBe('paused');
+      expect(svc.dayStatus(reloaded, '2026-07-15', SAT_18)).toBe('paused');
+      expect(svc.dayStatus(reloaded, '2026-07-16', SAT_18)).toBe('paused');
       // Day 17 (Fri) is after the pause (17 is not < 17), so it's due. Fri is past, not done → missed
       expect(svc.dayStatus(reloaded, '2026-07-17', SAT_18)).toBe('missed');
       // The pause prevented days 14-16 from counting as missed; day 17 is missed
@@ -1645,6 +1659,319 @@ describe('HabitService — Analytics §1 (dailyPooledRates, dailyDoneCounts, wee
 
       // Tue (2): 14 is a Tue, a done, b not done → 1/2 = 0.5
       expect(result[2]).toBeCloseTo(0.5, 5);
+    });
+  });
+});
+
+describe('HabitService — vacation store', () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it('vacations() is [] when the key is missing', () => {
+    const service = new HabitService();
+    expect(service.vacations()).toEqual([]);
+  });
+
+  it('loads valid rows and drops malformed ones', () => {
+    localStorage.setItem(
+      'habit_tracker.vacations.v1',
+      JSON.stringify([
+        { from: '2026-07-20', to: '2026-07-27' },
+        { from: 'bad', to: '2026-07-27' },
+        { from: '2026-07-27', to: '2026-07-20' },
+        null,
+      ]),
+    );
+    const service = new HabitService();
+    expect(service.vacations()).toEqual([{ from: '2026-07-20', to: '2026-07-27' }]);
+  });
+
+  it('a non-array value loads as []', () => {
+    localStorage.setItem('habit_tracker.vacations.v1', JSON.stringify({ from: '2026-07-20', to: '2026-07-27' }));
+    const service = new HabitService();
+    expect(service.vacations()).toEqual([]);
+  });
+
+  describe('currentVacation / isOnVacation / start / update / end', () => {
+    const WED_22 = new Date(2026, 6, 22);
+    const KEY = 'habit_tracker.vacations.v1';
+    const PAST = { from: '2026-07-01', to: '2026-07-08' };
+
+    function seed(list: { from: string; to: string }[]): void {
+      localStorage.setItem(KEY, JSON.stringify(list));
+    }
+
+    it('startVacation accepts a valid upcoming range and persists it', () => {
+      const service = new HabitService();
+      expect(service.startVacation('2026-07-22', '2026-07-29', WED_22)).toBe(true);
+      expect(service.vacations()).toEqual([{ from: '2026-07-22', to: '2026-07-29' }]);
+      expect(new HabitService().vacations()).toEqual([{ from: '2026-07-22', to: '2026-07-29' }]);
+    });
+
+    it('startVacation refuses a from date before today and persists nothing', () => {
+      const service = new HabitService();
+      expect(service.startVacation('2026-07-21', '2026-07-29', WED_22)).toBe(false);
+      expect(service.vacations()).toEqual([]);
+      expect(localStorage.getItem(KEY)).toBeNull();
+    });
+
+    it('startVacation refuses an empty range (to === from)', () => {
+      const service = new HabitService();
+      expect(service.startVacation('2026-07-25', '2026-07-25', WED_22)).toBe(false);
+      expect(service.vacations()).toEqual([]);
+      expect(localStorage.getItem(KEY)).toBeNull();
+    });
+
+    it('startVacation refuses a reversed range (to < from)', () => {
+      const service = new HabitService();
+      expect(service.startVacation('2026-07-29', '2026-07-25', WED_22)).toBe(false);
+      expect(service.vacations()).toEqual([]);
+      expect(localStorage.getItem(KEY)).toBeNull();
+    });
+
+    it('startVacation refuses a second vacation while one is upcoming', () => {
+      const service = new HabitService();
+      expect(service.startVacation('2026-07-22', '2026-07-29', WED_22)).toBe(true);
+      expect(service.startVacation('2026-08-01', '2026-08-05', WED_22)).toBe(false);
+      expect(service.vacations()).toEqual([{ from: '2026-07-22', to: '2026-07-29' }]);
+    });
+
+    it('currentVacation is null once to <= today', () => {
+      seed([{ from: '2026-07-10', to: '2026-07-22' }]);
+      const service = new HabitService();
+      expect(service.currentVacation(WED_22)).toBeNull();
+    });
+
+    it('a past vacation does not block startVacation', () => {
+      seed([PAST]);
+      const service = new HabitService();
+      expect(service.startVacation('2026-07-22', '2026-07-29', WED_22)).toBe(true);
+      expect(service.vacations()).toEqual([PAST, { from: '2026-07-22', to: '2026-07-29' }]);
+    });
+
+    it('isOnVacation is half-open [from, to) and covers past vacations', () => {
+      seed([PAST, { from: '2026-07-20', to: '2026-07-27' }]);
+      const service = new HabitService();
+      expect(service.isOnVacation('2026-07-20')).toBe(true);
+      expect(service.isOnVacation('2026-07-26')).toBe(true);
+      expect(service.isOnVacation('2026-07-27')).toBe(false);
+      expect(service.isOnVacation('2026-07-05')).toBe(true);
+      expect(service.isOnVacation('2026-07-08')).toBe(false);
+    });
+
+    it('updateVacation on an upcoming vacation may move from', () => {
+      seed([{ from: '2026-07-25', to: '2026-07-29' }]);
+      const service = new HabitService();
+      expect(service.updateVacation('2026-07-27', '2026-08-02', WED_22)).toBe(true);
+      expect(service.vacations()).toEqual([{ from: '2026-07-27', to: '2026-08-02' }]);
+      expect(new HabitService().vacations()).toEqual([{ from: '2026-07-27', to: '2026-08-02' }]);
+    });
+
+    it('updateVacation refuses a from before today', () => {
+      seed([{ from: '2026-07-25', to: '2026-07-29' }]);
+      const service = new HabitService();
+      expect(service.updateVacation('2026-07-21', '2026-07-29', WED_22)).toBe(false);
+      expect(service.vacations()).toEqual([{ from: '2026-07-25', to: '2026-07-29' }]);
+    });
+
+    it('updateVacation on an underway vacation accepts a moved to with from unchanged', () => {
+      seed([{ from: '2026-07-20', to: '2026-07-27' }]);
+      const service = new HabitService();
+      expect(service.updateVacation('2026-07-20', '2026-07-30', WED_22)).toBe(true);
+      expect(service.vacations()).toEqual([{ from: '2026-07-20', to: '2026-07-30' }]);
+    });
+
+    it('updateVacation on an underway vacation refuses a moved from', () => {
+      seed([{ from: '2026-07-20', to: '2026-07-27' }]);
+      const service = new HabitService();
+      expect(service.updateVacation('2026-07-21', '2026-07-30', WED_22)).toBe(false);
+      expect(service.vacations()).toEqual([{ from: '2026-07-20', to: '2026-07-27' }]);
+    });
+
+    it('updateVacation on an underway vacation refuses a to <= today', () => {
+      seed([{ from: '2026-07-20', to: '2026-07-27' }]);
+      const service = new HabitService();
+      expect(service.updateVacation('2026-07-20', '2026-07-22', WED_22)).toBe(false);
+      expect(service.vacations()).toEqual([{ from: '2026-07-20', to: '2026-07-27' }]);
+    });
+
+    it('endVacation on an underway vacation truncates to today and keeps the past one', () => {
+      seed([PAST, { from: '2026-07-20', to: '2026-07-27' }]);
+      const service = new HabitService();
+      service.endVacation(WED_22);
+      expect(service.vacations()).toEqual([PAST, { from: '2026-07-20', to: '2026-07-22' }]);
+      expect(new HabitService().vacations()).toEqual([PAST, { from: '2026-07-20', to: '2026-07-22' }]);
+    });
+
+    it('endVacation on an upcoming vacation removes it and keeps the past one', () => {
+      seed([PAST, { from: '2026-07-25', to: '2026-07-29' }]);
+      const service = new HabitService();
+      service.endVacation(WED_22);
+      expect(service.vacations()).toEqual([PAST]);
+    });
+
+    it('endVacation on a vacation started today removes it and keeps the past one', () => {
+      seed([PAST, { from: '2026-07-22', to: '2026-07-29' }]);
+      const service = new HabitService();
+      service.endVacation(WED_22);
+      expect(service.vacations()).toEqual([PAST]);
+    });
+  });
+
+  describe('isPausedOn honours vacations (AD-035, vacation-mode Step 5)', () => {
+    const WED_22 = new Date(2026, 6, 22);
+    const KEY = 'habit_tracker.vacations.v1';
+
+    function daily(overrides: Partial<Habit> = {}): Habit {
+      return {
+        id: 'h1',
+        name: 'Test',
+        createdAt: '2026-07-01T12:00:00Z',
+        completedDates: [],
+        schedule: { type: 'daily' },
+        startDate: '2026-07-01',
+        ...overrides,
+      };
+    }
+
+    function seed(list: { from: string; to: string }[]): void {
+      localStorage.setItem(KEY, JSON.stringify(list));
+    }
+
+    function julyDays(from: number, to: number): string[] {
+      const days: string[] = [];
+      for (let d = from; d <= to; d++) {
+        days.push(`2026-07-${String(d).padStart(2, '0')}`);
+      }
+      return days;
+    }
+
+    it('is true on from and on to - 1, false on to (half-open)', () => {
+      seed([{ from: '2026-07-20', to: '2026-07-27' }]);
+      const service = new HabitService();
+      const h = daily();
+      expect(service.isPausedOn(h, '2026-07-20')).toBe(true);
+      expect(service.isPausedOn(h, '2026-07-26')).toBe(true);
+      expect(service.isPausedOn(h, '2026-07-27')).toBe(false);
+    });
+
+    it('covers a habit whose startDate is inside the vacation', () => {
+      seed([{ from: '2026-07-10', to: '2026-07-20' }]);
+      const service = new HabitService();
+      const h = daily({ startDate: '2026-07-15' });
+      expect(service.isPausedOn(h, '2026-07-15')).toBe(true);
+    });
+
+    it('isManuallyPaused is false for a habit covered only by a vacation', () => {
+      seed([{ from: '2026-07-20', to: '2026-07-27' }]);
+      const service = new HabitService();
+      expect(service.isManuallyPaused(daily(), WED_22)).toBe(false);
+    });
+
+    it('isManuallyPaused is true for a habit with an open own range', () => {
+      const service = new HabitService();
+      const h = daily({ pausedRanges: [{ from: '2026-07-20', to: null }] });
+      expect(service.isManuallyPaused(h, WED_22)).toBe(true);
+    });
+
+    it('pause() during a vacation succeeds and appends an open range', () => {
+      // pause() reads the real clock, so the vacation starts today (I3 allows it)
+      // and runs a week, which keeps the test independent of the calendar date.
+      const today = HabitService.todayIso();
+      const end = new Date();
+      end.setDate(end.getDate() + 7);
+      seed([{ from: today, to: HabitService.todayIso(end) }]);
+      localStorage.setItem(
+        'habit_tracker.habits.v1',
+        JSON.stringify([daily({ id: 'h1' })]),
+      );
+
+      const service = new HabitService();
+      service.pause('h1');
+
+      const habit = service.habits()[0];
+      expect(habit.pausedRanges).toEqual([{ from: today, to: null }]);
+      expect(service.isManuallyPaused(habit)).toBe(true);
+    });
+
+    it('past vacations seeded in storage cannot be scheduled again (I3)', () => {
+      seed([{ from: '2026-07-01', to: '2026-07-08' }]);
+      const service = new HabitService();
+      expect(service.startVacation('2026-07-01', '2026-07-08', WED_22)).toBe(false);
+      expect(service.startVacation('2026-07-21', '2026-07-29', WED_22)).toBe(false);
+      expect(service.vacations()).toEqual([{ from: '2026-07-01', to: '2026-07-08' }]);
+    });
+
+    it('streak protection: a vacation neither breaks nor adds to the streak (11)', () => {
+      seed([{ from: '2026-07-11', to: '2026-07-18' }]);
+      const h = daily({ completedDates: [...julyDays(1, 10), '2026-07-18'] });
+      const service = new HabitService();
+      expect(service.currentStreak(h, new Date(2026, 6, 18))).toBe(11);
+    });
+
+    it('streak protection: with the vacation cleared the same history gives 1', () => {
+      seed([{ from: '2026-07-11', to: '2026-07-18' }]);
+      const h = daily({ completedDates: [...julyDays(1, 10), '2026-07-18'] });
+      localStorage.removeItem(KEY);
+      const service = new HabitService();
+      expect(service.currentStreak(h, new Date(2026, 6, 18))).toBe(1);
+    });
+
+    it('early end keeps the elapsed vacation days paused (streak 11)', () => {
+      const service = new HabitService();
+      expect(service.startVacation('2026-07-11', '2026-07-18', new Date(2026, 6, 11))).toBe(true);
+      service.endVacation(new Date(2026, 6, 13));
+      expect(service.vacations()).toEqual([{ from: '2026-07-11', to: '2026-07-13' }]);
+
+      const h = daily({ completedDates: [...julyDays(1, 10), '2026-07-13'] });
+      expect(service.currentStreak(h, new Date(2026, 6, 13))).toBe(11);
+    });
+  });
+
+  describe('dayStatus returns paused for vacation days (AD-036, vacation-mode Step 6)', () => {
+    const KEY = 'habit_tracker.vacations.v1';
+
+    function daily(overrides: Partial<Habit> = {}): Habit {
+      return {
+        id: 'h1',
+        name: 'Test',
+        createdAt: '2026-07-01T12:00:00Z',
+        completedDates: [],
+        schedule: { type: 'daily' },
+        startDate: '2026-07-01',
+        ...overrides,
+      };
+    }
+
+    it('a vacation day in the past and a future vacation day both give paused', () => {
+      localStorage.setItem(KEY, JSON.stringify([{ from: '2026-07-20', to: '2026-07-27' }]));
+      const service = new HabitService();
+      const h = daily();
+      // Past vacation day (today is after the vacation)
+      expect(service.dayStatus(h, '2026-07-22', new Date(2026, 6, 29))).toBe('paused');
+      // Future vacation day (today is before the vacation): paused, not future
+      expect(service.dayStatus(h, '2026-07-22', new Date(2026, 6, 10))).toBe('paused');
+    });
+
+    it('a completed vacation day gives done', () => {
+      localStorage.setItem(KEY, JSON.stringify([{ from: '2026-07-20', to: '2026-07-27' }]));
+      const service = new HabitService();
+      const h = daily({ completedDates: ['2026-07-22'] });
+      expect(service.dayStatus(h, '2026-07-22', new Date(2026, 6, 29))).toBe('done');
+    });
+
+    it('a vacation day before startDate gives not-due', () => {
+      localStorage.setItem(KEY, JSON.stringify([{ from: '2026-07-20', to: '2026-07-23' }]));
+      const service = new HabitService();
+      const h = daily({ startDate: '2026-07-25' });
+      expect(service.dayStatus(h, '2026-07-22', new Date(2026, 6, 29))).toBe('not-due');
+    });
+
+    it('a future day of a habit with a future startDate and no pause still gives future', () => {
+      const service = new HabitService();
+      const h = daily({ startDate: '2026-08-01' });
+      expect(service.dayStatus(h, '2026-08-03', new Date(2026, 6, 29))).toBe('future');
     });
   });
 });

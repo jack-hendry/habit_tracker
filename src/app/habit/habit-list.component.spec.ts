@@ -415,14 +415,14 @@ describe('HabitListComponent', () => {
       compiled.querySelector('.pause-button').click();
       fixture.detectChanges();
 
-      expect(service.isPaused(service.habits()[0])).toBe(true);
+      expect(service.isManuallyPaused(service.habits()[0])).toBe(true);
       expect(compiled.querySelector('.resume-button')).not.toBeNull();
       expect(compiled.querySelector('.pause-button')).toBeNull();
 
       compiled.querySelector('.resume-button').click();
       fixture.detectChanges();
 
-      expect(service.isPaused(service.habits()[0])).toBe(false);
+      expect(service.isManuallyPaused(service.habits()[0])).toBe(false);
       expect(compiled.querySelector('.pause-button')).not.toBeNull();
       expect(habit.id).toBe(service.habits()[0].id);
     });
@@ -476,6 +476,39 @@ describe('HabitListComponent', () => {
       fixture.detectChanges();
 
       expect(fixture.nativeElement.querySelectorAll('.habit-item').length).toBe(1);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Vacation-mode Step 16: the "not today" chip reads "paused" on a day the
+  // habit is paused (by a vacation or by hand), and the Pause/Resume button
+  // still tracks only the habit's own pause ranges (AD-035, Analyst §2.3).
+  // ---------------------------------------------------------------------------
+
+  describe('paused chip on a vacation day', () => {
+    it('a habit covered by a vacation today shows the chip "paused" and a Pause button, not Resume', () => {
+      const service = TestBed.inject(HabitService);
+      const now = new Date();
+      const plusSeven = HabitService.todayIso(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 7));
+      expect(service.startVacation(HabitService.todayIso(now), plusSeven)).toBe(true);
+      service.add('Vacationed', { type: 'daily' });
+      fixture.detectChanges();
+
+      const compiled: HTMLElement = fixture.nativeElement;
+      const chip = compiled.querySelector('.not-scheduled');
+      expect(chip?.textContent?.trim()).toBe('paused');
+      expect(compiled.querySelector('.pause-button')).not.toBeNull();
+      expect(compiled.querySelector('.resume-button')).toBeNull();
+    });
+
+    it('a normal habit on an unscheduled day still shows the chip "not today"', () => {
+      const service = TestBed.inject(HabitService);
+      const unscheduledDay = (new Date().getDay() + 1) % 7;
+      service.add('Off day', { type: 'weekdays', days: [unscheduledDay] });
+      fixture.detectChanges();
+
+      const chip = fixture.nativeElement.querySelector('.not-scheduled');
+      expect(chip?.textContent?.trim()).toBe('not today');
     });
   });
 });

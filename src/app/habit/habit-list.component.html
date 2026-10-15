@@ -148,7 +148,7 @@
                     <span class="starts-label">{{ getStartsLabel(habit) }}</span>
                   }
                   @if (!isDueToday(habit.id)) {
-                    <span class="not-scheduled">not today</span>
+                    <span class="not-scheduled">{{ notTodayLabel(habit) }}</span>
                   }
                 </div>
               </div>

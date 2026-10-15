@@ -47,6 +47,7 @@ describe('CalendarComponent design conformance', () => {
     'status-pending': { bg: 'rgb(254, 243, 199)', bd: 'rgb(245, 158, 11)', tc: 'rgb(146, 64, 14)' },
     'status-not-due': { bg: 'rgb(243, 244, 246)', bd: 'rgb(209, 213, 219)', tc: 'rgb(154, 161, 171)' },
     'status-future': { bg: 'rgb(231, 234, 255)', bd: 'rgb(143, 149, 232)', tc: 'rgb(67, 56, 202)' },
+    'status-paused': { bg: 'rgb(238, 242, 247)', bd: 'rgb(182, 194, 208)', tc: 'rgb(123, 135, 148)' },
   };
   const ACCENT = 'rgb(0, 102, 204)';
 
@@ -113,9 +114,9 @@ describe('CalendarComponent design conformance', () => {
   // Analyst §3.3 — the day number was a flat grey before this section. If a
   // future edit collapses them back to one colour, the per-status assertions
   // above still pass one at a time; this is what notices.
-  it('gives all five statuses five DIFFERENT day-number colours', () => {
+  it('gives every status in CS a DIFFERENT day-number colour', () => {
     const colours = Object.keys(CS).map((s) => getComputedStyle(probeCell(s).dayNumber).color);
-    expect(new Set(colours).size).toBe(5);
+    expect(new Set(colours).size).toBe(Object.keys(CS).length);
   });
 
   // CriticReview R2 — blank padding cells are transparent in the source, which
